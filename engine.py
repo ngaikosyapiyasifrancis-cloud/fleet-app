@@ -1,59 +1,66 @@
 # engine.py
-# This file contains the logic (the "engine") for our Fleet Performance app.
-# It calculates scores and generates coaching messages for drivers.
+# The brain of the Fleet Performance System.
+# Uses real Uber data columns to calculate a performance score and coaching message.
 
 
-def calculate_performance_score(on_time_rate, fuel_efficiency, safety_incidents):
+def calculate_performance_score(confirmation_rate, cancellation_rate, trips_per_hr, earnings_per_hr):
     """
-    Calculates a performance score (0 to 100) for a driver.
+    Calculates a performance score (0 to 100) for a driver using real Uber data.
 
     Parameters:
-    - on_time_rate      : % of trips completed on time       (e.g. 85 means 85%)
-    - fuel_efficiency   : km per litre                       (e.g. 12.5)
-    - safety_incidents  : number of incidents in the period  (e.g. 0, 1, 2...)
+    - confirmation_rate  : % of trips accepted   (e.g. 0.96 means 96%)
+    - cancellation_rate  : % of trips cancelled  (e.g. 0.02 means 2%)
+    - trips_per_hr       : trips completed per hour (e.g. 1.5)
+    - earnings_per_hr    : rands earned per hour  (e.g. 13.50)
 
     Returns:
     - A score between 0 and 100
     """
 
-    # --- COMPONENT 1: On-Time Score (worth 40% of total score) ---
-    # on_time_rate is already a percentage (0–100), so we use it directly.
-    on_time_score = on_time_rate * 0.40
+    # --- COMPONENT 1: Confirmation Score (worth 35% of total) ---
+    # confirmation_rate is between 0 and 1, so we multiply by 100 to get a percentage.
+    # Example: 0.96 → 96 → 96 * 0.35 = 33.6
+    confirmation_score = (confirmation_rate * 100) * 0.35
 
-    # --- COMPONENT 2: Fuel Efficiency Score (worth 35% of total score) ---
-    # We assume a "perfect" fuel efficiency is 15 km/L.
-    # We cap it at 100 so no one scores above perfect.
-    fuel_score = min((fuel_efficiency / 15) * 100, 100) * 0.35
+    # --- COMPONENT 2: Cancellation Score (worth 25% of total) ---
+    # Lower cancellation = better score.
+    # We subtract from 100 and penalise heavily — each 1% cancellation costs 10 points.
+    # Example: 0.02 (2%) → 100 - (2 * 10) = 80 → 80 * 0.25 = 20
+    cancellation_penalty = (cancellation_rate * 100) * 10
+    cancellation_score = max(100 - cancellation_penalty, 0) * 0.25
 
-    # --- COMPONENT 3: Safety Score (worth 25% of total score) ---
-    # Zero incidents = perfect safety score (100).
-    # Each incident reduces the score by 20 points.
-    # We use max(..., 0) so the score never goes below 0.
-    safety_score = max(100 - (safety_incidents * 20), 0) * 0.25
+    # --- COMPONENT 3: Productivity Score (worth 20% of total) ---
+    # We benchmark "great" as 2 trips per hour.
+    # Example: 1.5 trips/hr → (1.5/2 * 100) = 75 → 75 * 0.20 = 15
+    productivity_score = min((trips_per_hr / 2) * 100, 100) * 0.20
+
+    # --- COMPONENT 4: Earnings Efficiency Score (worth 20% of total) ---
+    # We benchmark "great" as R15/hr earnings.
+    # Example: R13.50/hr → (13.50/15 * 100) = 90 → 90 * 0.20 = 18
+    earnings_score = min((earnings_per_hr / 15) * 100, 100) * 0.20
 
     # --- TOTAL SCORE ---
-    total_score = on_time_score + fuel_score + safety_score
+    total_score = confirmation_score + cancellation_score + productivity_score + earnings_score
 
-    # Round to 1 decimal place for clean display
     return round(total_score, 1)
 
 
 def get_coaching_message(score):
     """
-    Returns a short coaching message based on the driver's score.
+    Returns a coaching message and status label based on the driver's score.
 
     Parameters:
     - score : the performance score (0 to 100)
 
     Returns:
-    - A string message for the driver
+    - A tuple: (status, message)
     """
 
     if score >= 85:
-        return "🌟 Excellent performance! Keep it up."
+        return ("🌟 Top Performer", "Excellent work! You are one of our best drivers. Keep it up.")
     elif score >= 70:
-        return "✅ Good work. Small improvements will push you to the top."
+        return ("✅ Good", "Good performance. Focus on maintaining your confirmation rate to reach the top.")
     elif score >= 50:
-        return "⚠️ Average performance. Focus on punctuality and safety."
+        return ("⚠️ Needs Improvement", "Average performance. Reduce cancellations and aim for more trips per hour.")
     else:
-        return "🚨 Needs urgent attention. Please schedule a coaching session."
+        return ("🚨 Urgent Attention", "Performance is below standard. Please contact your fleet manager for a coaching session.")

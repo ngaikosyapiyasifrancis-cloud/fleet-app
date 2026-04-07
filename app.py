@@ -1,51 +1,101 @@
 # app.py
-# This is the dashboard — what you see in your browser.
-# It uses Streamlit to display driver performance data in a table.
+# The dashboard for the Fleet Performance & Coaching System.
+# Reads a real Uber CSV file uploaded by the user.
 
 import streamlit as st
 import pandas as pd
 from engine import calculate_performance_score, get_coaching_message
 
 # --- PAGE SETUP ---
-st.set_page_config(page_title="Fleet Performance System", page_icon="🚛")
+st.set_page_config(page_title="Fleet Performance System", page_icon="🚛", layout="wide")
 
 st.title("🚛 Fleet Performance & Coaching System")
-st.write("Monitor your drivers and get coaching recommendations.")
+st.write("Upload your Uber driver report to see performance scores and coaching messages.")
 
-# --- MOCK DATA ---
-# This is fake data to test the app. Later you can replace this with real data.
-drivers = [
-    {"name": "John Mokoena",  "on_time_rate": 92, "fuel_efficiency": 13.5, "safety_incidents": 0},
-    {"name": "Sipho Dlamini", "on_time_rate": 75, "fuel_efficiency": 11.0, "safety_incidents": 1},
-    {"name": "Thabo Nkosi",   "on_time_rate": 60, "fuel_efficiency": 9.5,  "safety_incidents": 2},
-    {"name": "Lerato Molete", "on_time_rate": 88, "fuel_efficiency": 14.0, "safety_incidents": 0},
-    {"name": "Bongani Zulu",  "on_time_rate": 45, "fuel_efficiency": 8.0,  "safety_incidents": 3},
-]
+# --- FILE UPLOAD ---
+uploaded_file = st.file_uploader("📂 Upload your Uber CSV file", type=["csv"])
+
+if uploaded_file is None:
+    # Show a friendly message if no file uploaded yet
+    st.info("👆 Please upload your Uber driver CSV file to get started.")
+    st.stop()
+
+# --- READ THE CSV ---
+df = pd.read_csv(uploaded_file)
 
 # --- CALCULATE SCORES ---
-# Loop through each driver and calculate their score and coaching message
-for driver in drivers:
-    driver["score"] = calculate_performance_score(
-        driver["on_time_rate"],
-        driver["fuel_efficiency"],
-        driver["safety_incidents"]
+scores = []
+statuses = []
+messages = []
+
+for _, row in df.iterrows():
+    score = calculate_performance_score(
+        confirmation_rate=row["Confirmation Rate"],
+        cancellation_rate=row["Cancellation Rate"],
+        trips_per_hr=row["Trips / hr"],
+        earnings_per_hr=row["Earnings / hr"]
     )
-    driver["coaching"] = get_coaching_message(driver["score"])
+    status, message = get_coaching_message(score)
+    scores.append(score)
+    statuses.append(status)
+    messages.append(message)
 
-# --- BUILD TABLE ---
-# Convert the list of drivers into a Pandas DataFrame (a table)
-df = pd.DataFrame(drivers)
+df["Score"]             = scores
+df["Status"]            = statuses
+df["Coaching Message"]  = messages
 
-# Rename columns to look nice on screen
-df.columns = ["Driver", "On-Time %", "Fuel (km/L)", "Incidents", "Score", "Coaching Message"]
+# --- FULL NAME COLUMN ---
+df["Driver"] = df["Driver first name"] + " " + df["Driver surname"]
+
+# --- SUMMARY METRICS ---
+st.subheader("📈 Summary")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Drivers",  len(df))
+col2.metric("Avg Score",      round(df["Score"].mean(), 1))
+col3.metric("Top Performer",  df.loc[df["Score"].idxmax(), "Driver"])
+col4.metric("Needs Attention",len(df[df["Score"] < 50]))
+
+st.divider()
+
+# --- FILTER ---
+st.subheader("🔍 Filter Drivers")
+status_options = ["All"] + sorted(df["Status"].unique().tolist())
+selected_status = st.selectbox("Filter by Status:", status_options)
+
+if selected_status != "All":
+    filtered_df = df[df["Status"] == selected_status]
+else:
+    filtered_df = df
 
 # --- DISPLAY TABLE ---
-st.subheader("📊 Driver Performance Overview")
-st.dataframe(df, use_container_width=True)
+st.subheader(f"📊 Driver Performance Overview ({len(filtered_df)} drivers)")
 
-# --- SUMMARY NUMBERS ---
-st.subheader("📈 Summary")
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Drivers", len(df))
-col2.metric("Avg Score", round(df["Score"].mean(), 1))
-col3.metric("Top Driver", df.loc[df["Score"].idxmax(), "Driver"])
+display_cols = [
+    "Driver",
+    "Trips Taken",
+    "Trips / hr",
+    "Earnings / hr",
+    "Confirmation Rate",
+    "Cancellation Rate",
+    "Score",
+    "Status",
+    "Coaching Message"
+]
+
+st.dataframe(filtered_df[display_cols].sort_values("Score", ascending=False),
+             use_container_width=True)
+
+st.divider()
+
+# --- DOWNLOAD REPORT ---
+st.subheader("📥 Download Coaching Report")
+
+csv_export = filtered_df[display_cols].sort_values("Score", ascending=False)
+csv_data = csv_export.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="⬇️ Download Report as CSV",
+    data=csv_data,
+    file_name="fleet_coaching_report.csv",
+    mime="text/csv"
+)

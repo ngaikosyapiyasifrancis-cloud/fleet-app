@@ -182,3 +182,160 @@ def get_coaching_message(score, remaining, week_info):
         message = f"Critical — urgent action needed before Sunday. {days_left} day(s) left. {issue_text}"
 
     return (status, message)
+
+
+# ---------------------------------------------------------------------------
+# WHATSAPP MESSAGE GENERATOR
+# ---------------------------------------------------------------------------
+
+def generate_whatsapp_message(driver_name, score, status, remaining,
+                               week_info, row, language="english"):
+    """
+    Generates a full WhatsApp message for a driver.
+
+    Parameters:
+    - driver_name : full name of the driver
+    - score       : performance score (0-100)
+    - status      : status label e.g. "🌟 Top Performer"
+    - remaining   : dict from get_remaining_targets()
+    - week_info   : dict from get_week_progress()
+    - row         : the driver's full data row (pandas Series)
+    - language    : "english" or "zulu"
+
+    Returns:
+    - A formatted WhatsApp message string
+    """
+
+    day_name  = week_info["day_name"]
+    days_left = week_info["days_left"]
+
+    # --- Format metrics ---
+    ar  = round(row["Confirmation Rate"] * 100, 1)
+    cr  = round(row["Cancellation Rate"] * 100, 1)
+    hrs = round(row["Hours Online"], 1)
+    trp = int(row["Trips Taken"])
+    eph = round(row["Earnings / hr"], 2)
+    tot = round(row["Total Earnings"], 2)
+
+    # --- Remaining targets ---
+    hrs_needed  = remaining["hours_needed"]
+    trp_needed  = remaining["trips_needed"]
+    ar_ok       = "✅" if remaining["ar_on_track"]  else "❌"
+    cr_ok       = "✅" if remaining["cr_on_track"]  else "❌"
+    hrs_ok      = "✅" if remaining["hours_on_track"] else "❌"
+    trp_ok      = "✅" if remaining["trips_on_track"] else "❌"
+
+    if language == "zulu":
+        msg = f"""🚛 *UMBIKO WOKUSEBENZA KWEVIKI*
+━━━━━━━━━━━━━━━━━━━━
+👤 Umshayeli: *{driver_name}*
+📅 Usuku: *{day_name}* | Izinsuku eziShiyiwe: *{days_left}*
+⭐ Inombolo Yokusebenza: *{score}/100*
+📊 Isimo: *{status}*
+
+━━━━━━━━━━━━━━━━━━━━
+📋 *IZINKOMBA ZEVIKI KUZE KUBE MANJE*
+━━━━━━━━━━━━━━━━━━━━
+⏱️ Amahora Online: *{hrs} hrs* {hrs_ok} _(kudingeka okungenani 50 hrs)_
+🚗 Izinhambazime: *{trp} trips* {trp_ok} _(kudingeka okungenani 30 trips)_
+✅ Amazinga Wokuqinisekisa: *{ar}%* {ar_ok} _(kufanele abe ngo-80%+)_
+❌ Amazinga Okukhansela: *{cr}%* {cr_ok} _(kufanele abe ngaphansi kuka-5%)_
+💰 Inzuzo / Ihora: *R{eph}*
+💵 Inzuzo Yesamba: *R{tot}*
+
+━━━━━━━━━━━━━━━━━━━━
+🎯 *OKUSASELE UKUZE UFINYELELE IZINHLOSO*
+━━━━━━━━━━━━━━━━━━━━
+⏱️ Amahora asasele: *{hrs_needed} hrs*
+🚗 Izinhambazime ezisasele: *{trp_needed} trips*
+{'⚠️ Amazinga AR akekho endleleni — gcina ukwamukela amabhukhu!' if not remaining['ar_on_track'] else '✅ AR inhloso ifinyelelwe!'}
+{'⚠️ Amazinga CR aphezulu kakhulu — nciphisa ukukhansela!' if not remaining['cr_on_track'] else '✅ CR inhloso ifinyelelwe!'}
+
+━━━━━━━━━━━━━━━━━━━━
+💬 *UMLAYEZO WOKUQEQESHA*
+━━━━━━━━━━━━━━━━━━━━
+Qhubeka usebenza nkumu! Usuku oluhle lokushayela. 🙏
+_SparklingBlu Moto Fleet Team_"""
+
+    else:
+        msg = f"""🚛 *WEEKLY PERFORMANCE REPORT*
+━━━━━━━━━━━━━━━━━━━━
+👤 Driver: *{driver_name}*
+📅 Day: *{day_name}* | Days Left: *{days_left}*
+⭐ Performance Score: *{score}/100*
+📊 Status: *{status}*
+
+━━━━━━━━━━━━━━━━━━━━
+📋 *THIS WEEK'S METRICS SO FAR*
+━━━━━━━━━━━━━━━━━━━━
+⏱️ Hours Online: *{hrs} hrs* {hrs_ok} _(min 50 hrs required)_
+🚗 Trips Taken: *{trp} trips* {trp_ok} _(min 30 trips required)_
+✅ Acceptance Rate: *{ar}%* {ar_ok} _(must be 80%+)_
+❌ Cancellation Rate: *{cr}%* {cr_ok} _(must be 5% or below)_
+💰 Earnings / hr: *R{eph}*
+💵 Total Earnings: *R{tot}*
+
+━━━━━━━━━━━━━━━━━━━━
+🎯 *WHAT YOU STILL NEED BY SUNDAY*
+━━━━━━━━━━━━━━━━━━━━
+⏱️ Hours still needed: *{hrs_needed} hrs*
+🚗 Trips still needed: *{trp_needed} trips*
+{'⚠️ AR is off track — keep accepting trips!' if not remaining['ar_on_track'] else '✅ AR target met!'}
+{'⚠️ CR is too high — reduce cancellations!' if not remaining['cr_on_track'] else '✅ CR target met!'}
+
+━━━━━━━━━━━━━━━━━━━━
+💬 *COACHING MESSAGE*
+━━━━━━━━━━━━━━━━━━━━
+Keep pushing — you've got this! Have a great day on the road. 🙏
+_SparklingBlu Moto Fleet Team_"""
+
+    return msg
+
+
+def generate_bulk_whatsapp_message(df_summary, week_info):
+    """
+    Generates a single bulk WhatsApp message summarising the whole fleet.
+
+    Parameters:
+    - df_summary : pandas DataFrame with Score and Status columns
+    - week_info  : dict from get_week_progress()
+
+    Returns:
+    - A formatted bulk WhatsApp message string
+    """
+    day_name    = week_info["day_name"]
+    days_left   = week_info["days_left"]
+    total       = len(df_summary)
+    avg_score   = round(df_summary["Score"].mean(), 1)
+    top         = len(df_summary[df_summary["Score"] >= 85])
+    good        = len(df_summary[(df_summary["Score"] >= 70) & (df_summary["Score"] < 85)])
+    needs_imp   = len(df_summary[(df_summary["Score"] >= 50) & (df_summary["Score"] < 70)])
+    urgent      = len(df_summary[df_summary["Score"] < 50])
+    top_driver  = df_summary.loc[df_summary["Score"].idxmax(), "Driver"]
+    top_score   = df_summary["Score"].max()
+
+    msg = f"""🚛 *SPARKLINGBLU MOTO — FLEET WEEKLY UPDATE*
+━━━━━━━━━━━━━━━━━━━━
+📅 *{day_name}* | {days_left} day(s) left this week
+👥 Total Active Drivers: *{total}*
+⭐ Fleet Average Score: *{avg_score}/100*
+
+━━━━━━━━━━━━━━━━━━━━
+📊 *PERFORMANCE BREAKDOWN*
+━━━━━━━━━━━━━━━━━━━━
+🌟 Top Performers  : *{top} drivers*
+✅ Good             : *{good} drivers*
+⚠️ Needs Improvement: *{needs_imp} drivers*
+🚨 Urgent Attention : *{urgent} drivers*
+
+━━━━━━━━━━━━━━━━━━━━
+🏆 *DRIVER OF THE WEEK (SO FAR)*
+━━━━━━━━━━━━━━━━━━━━
+👤 *{top_driver}* with a score of *{top_score}/100* 🎉
+
+━━━━━━━━━━━━━━━━━━━━
+💬 Let's finish this week strong!
+Targets: 50hrs | 80%+ AR | ≤5% CR | 30+ trips
+_SparklingBlu Moto Fleet Team_ 🙏"""
+
+    return msg

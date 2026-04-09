@@ -1,8 +1,8 @@
 # app.py
-# Fleet Performance & Coaching System
 
 import streamlit as st
 import pandas as pd
+
 from engine import (
     calculate_performance_score,
     get_coaching_message,
@@ -11,212 +11,194 @@ from engine import (
     generate_whatsapp_message,
 )
 
-# --- PAGE SETUP ---
+from teams import match_drivers_to_teams, TEAMS
+from pdf_generator import generate_fleet_pdf, generate_team_pdf
+
+# ---------------------------
+# PAGE SETUP
+# ---------------------------
 st.set_page_config(
-    page_title="Fleet Performance System",
-    page_icon="🚛",
+    page_title="SparklingBlu — Weekly Driver Performance Tracker",
     layout="wide"
 )
 
-# --- HEADER ---
-st.title("🚛 Fleet Performance & Coaching System")
-st.caption("SparklingBlu Moto — Weekly Driver Performance Tracker")
+st.title("🚛 SparklingBlu — Weekly Driver Performance Tracker")
 st.divider()
 
-# --- WEEK PROGRESS ---
+# ---------------------------
+# WEEK INFO
+# ---------------------------
 week_info = get_week_progress()
 
 st.info(
-    f"📅 {week_info['day_name']} | "
-    f"⏳ {round(week_info['progress']*100,1)}% of week done | "
-    f"📆 {week_info['days_left']} day(s) left"
+    f"{week_info['day_name']} | "
+    f"{round(week_info['progress']*100,1)}% week done | "
+    f"{week_info['days_left']} day(s) left"
 )
 
-# --- FILE UPLOAD ---
-uploaded_file = st.file_uploader("📂 Upload Uber CSV", type=["csv"])
+# ---------------------------
+# UPLOAD CSV
+# ---------------------------
+file = st.file_uploader("Upload Uber CSV", type=["csv"])
 
-if uploaded_file is None:
-    st.warning("Upload your CSV to start.")
+if file is None:
     st.stop()
 
-# --- READ DATA ---
-df = pd.read_csv(uploaded_file)
+df = pd.read_csv(file)
 df["Driver"] = df["Driver first name"] + " " + df["Driver surname"]
 
-# --- CALCULATIONS ---
-scores, statuses, messages = [], [], []
+# ---------------------------
+# MATCH TEAMS
+# ---------------------------
+df = match_drivers_to_teams(df)
+
+# ---------------------------
+# CALCULATIONS
+# ---------------------------
+scores = []
+statuses = []
 
 for _, row in df.iterrows():
 
     remaining = get_remaining_targets(
-        hours_online=row["Hours Online"],
-        trips_taken=row["Trips Taken"],
-        confirmation_rate=row["Confirmation Rate"],
-        cancellation_rate=row["Cancellation Rate"],
-        progress=week_info["progress"]
+        row["Hours Online"],
+        row["Trips Taken"],
+        row["Confirmation Rate"],
+        row["Cancellation Rate"],
+        week_info["progress"]
     )
 
     score = calculate_performance_score(
-        confirmation_rate=row["Confirmation Rate"],
-        cancellation_rate=row["Cancellation Rate"],
-        trips_per_hr=row["Trips / hr"],
-        earnings_per_hr=row["Earnings / hr"],
-        hours_online=row["Hours Online"],
-        trips_taken=row["Trips Taken"],
-        progress=week_info["progress"]
+        row["Confirmation Rate"],
+        row["Cancellation Rate"],
+        row["Trips / hr"],
+        row["Earnings / hr"],
+        row["Hours Online"],
+        row["Trips Taken"],
+        week_info["progress"]
     )
 
-    status, message = get_coaching_message(score, remaining, week_info)
+    status, _ = get_coaching_message(score, remaining, week_info)
 
     scores.append(score)
     statuses.append(status)
-    messages.append(message)
 
 df["Score"] = scores
 df["Status"] = statuses
-df["Coaching Message"] = messages
 
-# --- SUMMARY ---
-st.subheader("📊 Fleet Summary")
-col1, col2, col3 = st.columns(3)
+# ---------------------------
+# KPI DASHBOARD
+# ---------------------------
+st.subheader("📊 Overview")
 
-col1.metric("Drivers", len(df))
-col2.metric("Avg Score", round(df["Score"].mean(), 1))
-col3.metric("Needs Attention", len(df[df["Score"] < 70]))
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric("Total Drivers", len(df))
+col2.metric("Top Performers", len(df[df["Score"] >= 85]))
+col3.metric("Needs Attention", len(df[(df["Score"] >= 50) & (df["Score"] < 70)]))
+col4.metric("Urgent Attention", len(df[df["Score"] < 50]))
 
 st.divider()
 
-# --- TABS ---
-tab1, tab2, tab3 = st.tabs([
+# ---------------------------
+# TABS
+# ---------------------------
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊 All Drivers",
-    "🚨 Needs Attention",
-    "🌟 Top Performers"
+    "⚠️ Needs Attention",
+    "🚨 Needs Urgent Attention",
+    "👥 Teams"
 ])
 
-# ==============================
+# ---------------------------
 # TAB 1 — ALL DRIVERS
-# ==============================
+# ---------------------------
 with tab1:
-
-    st.subheader("All Drivers")
 
     for i, row in df.sort_values("Score", ascending=False).iterrows():
 
-        with st.container():
+        col1, col2, col3 = st.columns([3,2,2])
 
-            col1, col2, col3 = st.columns([3, 2, 2])
+        with col1:
+            st.markdown(f"**{row['Driver']}**")
+            st.caption(f"{row['Team']} | Score: {row['Score']}")
 
-            # DRIVER INFO
-            with col1:
-                st.markdown(f"### {row['Driver']}")
-                st.caption(f"Score: {round(row['Score'],1)} | {row['Status']}")
+        with col2:
+            st.caption(f"Hours: {row['Hours Online']} | Trips: {row['Trips Taken']}")
 
-            # STATS
-            with col2:
-                st.write(f"⏱ Hours: {row['Hours Online']}")
-                st.write(f"🚗 Trips: {row['Trips Taken']}")
-                st.write(f"✅ AR: {round(row['Confirmation Rate']*100,1)}%")
-                st.write(f"❌ CR: {round(row['Cancellation Rate']*100,1)}%")
+        with col3:
+            if st.button("Generate Message", key=f"a{i}"):
 
-            # BUTTON
-            with col3:
+                remaining = get_remaining_targets(
+                    row["Hours Online"],
+                    row["Trips Taken"],
+                    row["Confirmation Rate"],
+                    row["Cancellation Rate"],
+                    week_info["progress"]
+                )
 
-                if st.button("Generate Message", key=f"btn_{i}"):
+                msg = generate_whatsapp_message(
+                    row["Driver"],
+                    row["Score"],
+                    row["Status"],
+                    remaining,
+                    week_info,
+                    row
+                )
 
-                    remaining = get_remaining_targets(
-                        hours_online=row["Hours Online"],
-                        trips_taken=row["Trips Taken"],
-                        confirmation_rate=row["Confirmation Rate"],
-                        cancellation_rate=row["Cancellation Rate"],
-                        progress=week_info["progress"]
-                    )
+                st.text_area("Message", msg, key=f"m{i}")
 
-                    msg = generate_whatsapp_message(
-                        driver_name=row["Driver"],
-                        score=row["Score"],
-                        status=row["Status"],
-                        remaining=remaining,
-                        week_info=week_info,
-                        row=row,
-                        language="english"
-                    )
+        st.divider()
 
-                    st.text_area(
-                        "Copy Message",
-                        msg,
-                        height=250,
-                        key=f"text_{i}"
-                    )
+    # -------- PDF BUTTON --------
+    if st.button("📄 Download Fleet PDF"):
+        pdf = generate_fleet_pdf(df)
+        st.download_button(
+            "Download Fleet Report",
+            pdf,
+            "fleet_report.pdf"
+        )
 
-            st.divider()
-
-# ==============================
+# ---------------------------
 # TAB 2 — NEEDS ATTENTION
-# ==============================
+# ---------------------------
 with tab2:
 
-    st.subheader("Drivers Needing Attention")
+    df_att = df[df["Score"] < 70]
 
-    attention_df = df[df["Score"] < 70].sort_values("Score")
+    for i, row in df_att.iterrows():
+        st.write(f"{row['Driver']} — {row['Score']}")
 
-    if attention_df.empty:
-        st.success("All drivers performing well!")
-    else:
-        for i, row in attention_df.iterrows():
-
-            with st.container():
-
-                col1, col2 = st.columns([3, 1])
-
-                with col1:
-                    st.write(f"⚠️ {row['Driver']} — Score: {round(row['Score'],1)}")
-
-                with col2:
-                    if st.button("Message", key=f"alert_{i}"):
-
-                        remaining = get_remaining_targets(
-                            hours_online=row["Hours Online"],
-                            trips_taken=row["Trips Taken"],
-                            confirmation_rate=row["Confirmation Rate"],
-                            cancellation_rate=row["Cancellation Rate"],
-                            progress=week_info["progress"]
-                        )
-
-                        msg = generate_whatsapp_message(
-                            driver_name=row["Driver"],
-                            score=row["Score"],
-                            status=row["Status"],
-                            remaining=remaining,
-                            week_info=week_info,
-                            row=row,
-                            language="english"
-                        )
-
-                        st.text_area("Message", msg, key=f"alert_text_{i}")
-
-# ==============================
-# TAB 3 — TOP PERFORMERS
-# ==============================
+# ---------------------------
+# TAB 3 — URGENT
+# ---------------------------
 with tab3:
 
-    st.subheader("Top Performers")
+    df_urgent = df[df["Score"] < 50]
 
-    top_df = df[df["Score"] >= 85].sort_values("Score", ascending=False)
+    for _, row in df_urgent.iterrows():
+        st.error(f"{row['Driver']} — {row['Score']}")
 
-    if top_df.empty:
-        st.info("No top performers yet.")
-    else:
-        for _, row in top_df.iterrows():
-            st.success(f"🌟 {row['Driver']} — Score: {round(row['Score'],1)}")
+# ---------------------------
+# TAB 4 — TEAMS
+# ---------------------------
+with tab4:
 
-# --- DOWNLOAD ---
-st.divider()
+    team_names = list(TEAMS.keys())
+    selected_team = st.selectbox("Select Team", team_names)
 
-csv = df.sort_values("Score", ascending=False).to_csv(index=False).encode("utf-8")
+    team_df = df[df["Team"] == selected_team]
 
-st.download_button(
-    "⬇️ Download Report",
-    csv,
-    "fleet_report.csv",
-    "text/csv"
-)
+    st.subheader(selected_team)
+
+    for _, row in team_df.iterrows():
+        st.write(f"{row['Driver']} — {row['Score']}")
+
+    # TEAM PDF
+    if st.button("📄 Download Team PDF"):
+        pdf = generate_team_pdf(team_df, selected_team)
+        st.download_button(
+            "Download Team Report",
+            pdf,
+            f"{selected_team}_report.pdf"
+        )

@@ -189,14 +189,13 @@ st.divider()
 DISPLAY_COLS = [
     "Driver", "Team", "Hours Online", "Trips Taken",
     "Confirmation Rate", "Cancellation Rate",
-    "Earnings / hr", "Score", "Status", "KPI Met"
+    "Score", "Status", "KPI Met"
 ]
 
 def fmt(data):
     d = data[DISPLAY_COLS].copy()
     d["Confirmation Rate"] = (d["Confirmation Rate"] * 100).round(1).astype(str) + "%"
     d["Cancellation Rate"] = (d["Cancellation Rate"] * 100).round(1).astype(str) + "%"
-    d["Earnings / hr"]     = "R" + d["Earnings / hr"].round(2).astype(str)
     d["Hours Online"]      = d["Hours Online"].round(1)
     return d
 

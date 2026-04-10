@@ -160,7 +160,7 @@ def generate_fleet_pdf(df, week_label=""):
         pdf.ln()
 
     _footer(pdf)
-    return bytes(pdf.output())
+    return bytearray(pdf.output())
 
 
 # ─────────────────────────────────────────────
@@ -255,4 +255,4 @@ def generate_team_pdf(team_name, leader_name, team_df, week_label=""):
     )
 
     _footer(pdf)
-    return bytes(pdf.output())
+    return bytearray(pdf.output())

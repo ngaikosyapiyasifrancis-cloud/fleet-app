@@ -20,7 +20,6 @@ TEAMS = {
             "Esrom Maswikana Sekhobana",
             "K Tshabalala",
             "Alli Mabvuto",
-            "Paul Moffat",
             "Asanda Nyembe",
             "Innocent Grant Chapotera",
         ],

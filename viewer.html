@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SparklingBlu Moto — Performance Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .header { background: linear-gradient(90deg, #0f2027, #203a43, #2c5364); color: white; padding: 24px; border-radius: 16px; margin-bottom: 24px; text-align: center; }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        .card { background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .card-title { font-size: 18px; font-weight: 700; color: #203a43; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; }
+        .search-box { width: 100%; padding: 16px; font-size: 16px; border: 2px solid #e0e0e0; border-radius: 12px; margin-bottom: 16px; }
+        .search-box:focus { outline: none; border-color: #2c5364; }
+        .score-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 32px; border-radius: 16px; text-align: center; margin-bottom: 20px; }
+        .score-value { font-size: 64px; font-weight: 800; }
+        .score-label { font-size: 18px; opacity: 0.9; margin-top: 8px; }
+        .score-status { display: inline-block; background: rgba(255,255,255,0.2); padding: 8px 24px; border-radius: 24px; margin-top: 16px; font-weight: 600; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .metric-card { background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center; }
+        .metric-value { font-size: 28px; font-weight: 700; color: #203a43; }
+        .metric-label { font-size: 13px; color: #666; margin-top: 4px; }
+        .metric-target { font-size: 12px; color: #888; margin-top: 4px; }
+        .metric-status { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-top: 8px; }
+        .status-ok { background: #e8f5e9; color: #2e7d32; }
+        .status-behind { background: #fff3e0; color: #e65100; }
+        .remaining-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #fff3e0; border-radius: 8px; margin-bottom: 8px; }
+        .remaining-label { font-weight: 600; color: #e65100; }
+        .remaining-value { font-weight: 700; color: #bf360c; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #f8f9fa; padding: 20px; border-radius: 12px; text-align: center; }
+        .stat-value { font-size: 24px; font-weight: 700; color: #203a43; }
+        .stat-label { font-size: 12px; color: #666; margin-top: 4px; }
+        .driver-list-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #f8f9fa; border-radius: 10px; margin-bottom: 8px; }
+        .driver-info { flex: 1; }
+        .driver-name { font-weight: 600; color: #203a43; }
+        .driver-team { font-size: 12px; color: #888; }
+        .driver-score { font-size: 20px; font-weight: 700; padding: 0 16px; }
+        .score-high { color: #2e7d32; }
+        .score-medium { color: #f57c00; }
+        .score-low { color: #c62828; }
+        .insights-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 24px; border-radius: 16px; margin-bottom: 20px; }
+        .insight-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.2); }
+        .insight-row:last-child { border-bottom: none; }
+        .btn { display: inline-block; background: #25D366; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 8px 4px; cursor: pointer; border: none; font-size: 14px; }
+        .btn:hover { background: #1da851; }
+        .btn-secondary { background: #667eea; }
+        .btn-secondary:hover { background: #5a6fd6; }
+        .footer { text-align: center; margin-top: 40px; color: #888; font-size: 14px; }
+        .hidden { display: none; }
+        .text-center { text-align: center; }
+        .mt-20 { margin-top: 20px; }
+        .driver-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .team-badge { background: #e8f5e9; color: #2e7d32; padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 600; }
+        @media (max-width: 600px) { .metrics-grid, .stats-grid { grid-template-columns: 1fr; } .score-value { font-size: 48px; } }
+        .suggestions { background: white; border: 1px solid #e0e0e0; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 16px; }
+        .suggestion-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+        .suggestion-item:hover { background: #f5f5f5; }
+        .confirm-box { text-align: center; padding: 40px; }
+        .confirm-box h2 { color: #203a43; margin-bottom: 16px; }
+        .confirm-box p { color: #666; margin-bottom: 20px; }
+        .confirm-btn { background: linear-gradient(90deg, #0f2027, #203a43); color: white; border: none; padding: 16px 48px; font-size: 18px; border-radius: 12px; cursor: pointer; }
+        .confirm-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(15,32,39,0.3); }
+        .quick-links { display: flex; flex-wrap: wrap; gap: 8px; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #2c5364; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SparklingBlu Moto</h1>
+            <p>Weekly Driver Performance Tracker</p>
+        </div>
+
+        <div id="loading" class="card">
+            <div class="loading"><div class="spinner"></div><p>Loading performance data...</p></div>
+        </div>
+
+        <div id="confirm-view" class="card hidden">
+            <div class="confirm-box">
+                <h2>Find Your Performance Stats</h2>
+                <p>Enter your name to see your weekly performance and targets</p>
+                <input type="text" id="search-input" class="search-box" placeholder="Type your name...">
+                <div id="suggestions" class="suggestions hidden"></div>
+                <button class="confirm-btn" onclick="confirmName()">View My Stats</button>
+            </div>
+        </div>
+
+        <div id="driver-view" class="card hidden">
+            <div class="driver-header">
+                <div>
+                    <div style="font-size: 24px; font-weight: 700; color: #0f2027;" id="d-name">Driver Name</div>
+                    <div style="color: #666; margin-top: 4px;" id="d-day"></div>
+                </div>
+                <div class="team-badge" id="d-team">Team</div>
+            </div>
+            <div class="score-section">
+                <div class="score-value" id="d-score">--</div>
+                <div class="score-label">Performance Score</div>
+                <div class="score-status" id="d-status">--</div>
+            </div>
+            <div class="card-title">Your Weekly Metrics</div>
+            <div class="metrics-grid" id="d-metrics"></div>
+            <div class="card-title mt-20">What You Need by Sunday</div>
+            <div id="d-remaining"></div>
+            <div class="mt-20" style="background: #f5f7fa; padding: 20px; border-radius: 12px;">
+                <h3 style="color: #203a43; margin-bottom: 12px;">Coaching Message</h3>
+                <p id="d-coaching" style="color: #555; line-height: 1.6;"></p>
+            </div>
+            <div class="mt-20 text-center">
+                <button class="btn" onclick="location.href=location.pathname">Search Another Driver</button>
+            </div>
+        </div>
+
+        <div id="team-view" class="card hidden">
+            <h2 style="color: #203a43; margin-bottom: 4px;" id="t-title">Team Performance</h2>
+            <p style="color: #666; margin-bottom: 20px;" id="t-leader"></p>
+            <div class="stats-grid" id="t-stats"></div>
+            <div class="card-title">Team Members</div>
+            <div id="t-drivers"></div>
+            <div class="mt-20 text-center">
+                <a href="?mode=fleet" class="btn btn-secondary">Back to Fleet Overview</a>
+            </div>
+        </div>
+
+        <div id="fleet-view" class="card hidden">
+            <div class="insights-card">
+                <h3 style="margin-bottom: 16px;">Fleet Performance Insights</h3>
+                <div id="f-insights"></div>
+            </div>
+            <div class="card-title">Team Performance Breakdown</div>
+            <div id="f-teams"></div>
+            <div class="card-title mt-20">Search Driver by Name</div>
+            <input type="text" id="f-search" class="search-box" placeholder="Type driver name..." oninput="filterFleetDrivers()">
+            <div id="f-drivers"></div>
+            <div class="card-title mt-20">Quick Links</div>
+            <div class="quick-links" id="f-links"></div>
+        </div>
+
+        <div class="footer">
+            <p>SparklingBlu Moto Fleet System</p>
+            <p>Weekly Targets: 50+ hrs | 80%+ AR | Max 5% CR | 30+ trips</p>
+        </div>
+    </div>
+
+    <script>
+        const TARGETS = { hours: 50, acceptance: 80, cancellation: 5, trips: 30 };
+        const urlParams = new URLSearchParams(window.location.search);
+        const mode = urlParams.get('mode') || 'driver';
+        const driverName = urlParams.get('name');
+        const teamName = urlParams.get('team');
+        const weekLabel = urlParams.get('week') || '';
+
+        const TEAMS = {
+            'Team BK': { leader: 'Haston Bikausi', drivers: [] },
+            'Team SV': { leader: 'Sabelo Vumasi', drivers: [] },
+            'Team SS': { leader: 'Stephen Mohali', drivers: [] },
+            'Team LB': { leader: 'Lester Gilamoto Banda', drivers: [] }
+        };
+        let allDrivers = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const storedData = localStorage.getItem('sparklingblu_fleet_data');
+            if (storedData) {
+                try {
+                    const data = JSON.parse(storedData);
+                    initializeWithData(data);
+                } catch (e) { showDemoMode(); }
+            } else { showDemoMode(); }
+        });
+
+        function showDemoMode() {
+            document.getElementById('loading').innerHTML = `
+                <div class="confirm-box">
+                    <h2>Welcome to SparklingBlu Fleet Tracker</h2>
+                    <p>This page requires data from the main application.</p>
+                    <p style="font-size: 14px; color: #888;">
+                        To view live driver data, please use the links generated by the Streamlit app.<br>
+                        Each driver link contains their specific performance data.
+                    </p>
+                    <div class="mt-20">
+                        <a href="?mode=fleet" class="btn">View Demo Fleet Overview</a>
+                    </div>
+                </div>`;
+        }
+
+        function initializeWithData(data) {
+            allDrivers = data.drivers || [];
+            allDrivers.forEach(d => { if (d.Team && TEAMS[d.Team]) TEAMS[d.Team].drivers.push(d); });
+            document.getElementById('loading').classList.add('hidden');
+            if (mode === 'fleet') showFleetView(data);
+            else if (mode === 'team' && teamName) showTeamView(decodeURIComponent(teamName), data);
+            else if (mode === 'driver' && driverName) showDriverView(decodeURIComponent(driverName), data);
+            else showConfirmView(data);
+        }
+
+        function showConfirmView(data) {
+            document.getElementById('confirm-view').classList.remove('hidden');
+            const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase();
+                if (query.length < 2) { document.getElementById('suggestions').classList.add('hidden'); return; }
+                const matches = allDrivers.filter(d => d.Driver.toLowerCase().includes(query)).slice(0, 5);
+                if (matches.length > 0) {
+                    document.getElementById('suggestions').innerHTML = matches.map(d => 
+                        `<div class="suggestion-item" onclick="selectDriver('${d.Driver}')">${d.Driver}</div>`).join('');
+                    document.getElementById('suggestions').classList.remove('hidden');
+                } else {
+                    document.getElementById('suggestions').innerHTML = '<div class="suggestion-item">No matches found</div>';
+                    document.getElementById('suggestions').classList.remove('hidden');
+                }
+            });
+        }
+
+        function selectDriver(name) { document.getElementById('search-input').value = name; document.getElementById('suggestions').classList.add('hidden'); }
+        function confirmName() {
+            const name = document.getElementById('search-input').value.trim();
+            if (name) window.location.href = `${location.pathname}?mode=driver&name=${encodeURIComponent(name)}&week=${encodeURIComponent(weekLabel)}`;
+        }
+
+        function showDriverView(name, data) {
+            const driver = allDrivers.find(d => d.Driver.toLowerCase() === name.toLowerCase());
+            document.getElementById('confirm-view').classList.add('hidden');
+            document.getElementById('driver-view').classList.remove('hidden');
+            if (!driver) { document.getElementById('d-name').textContent = name + ' (Not Found)'; return; }
+            document.getElementById('d-name').textContent = driver.Driver;
+            document.getElementById('d-team').textContent = driver.Team || 'Unassigned';
+            document.getElementById('d-day').textContent = weekLabel ? `Week: ${weekLabel}` : 'Current Week';
+            const score = driver.Score || 0;
+            document.getElementById('d-score').textContent = `${score}/100`;
+            document.getElementById('d-status').textContent = driver.Status || 'N/A';
+            const scoreSection = document.querySelector('.score-section');
+            if (score >= 85) scoreSection.style.background = 'linear-gradient(135deg, #11998e, #38ef7d)';
+            else if (score >= 70) scoreSection.style.background = 'linear-gradient(135deg, #2193b0, #6dd5ed)';
+            else if (score >= 50) scoreSection.style.background = 'linear-gradient(135deg, #f093fb, #f5576c)';
+            else scoreSection.style.background = 'linear-gradient(135deg, #eb3349, #f45c43)';
+            const ar = Math.round((driver['Confirmation Rate'] || 0) * 100);
+            const cr = Math.round((driver['Cancellation Rate'] || 0) * 100);
+            const hrs = Math.round((driver['Hours Online'] || 0) * 10) / 10;
+            const trips = driver['Trips Taken'] || 0;
+            document.getElementById('d-metrics').innerHTML = `
+                <div class="metric-card"><div class="metric-value">${hrs} hrs</div><div class="metric-label">Hours Online</div><div class="metric-target">Target: 50+ hrs</div><div class="metric-status ${hrs >= 50 ? 'status-ok' : 'status-behind'}">${hrs >= 50 ? '[OK]' : '[Behind]'}</div></div>
+                <div class="metric-card"><div class="metric-value">${trips}</div><div class="metric-label">Trips Taken</div><div class="metric-target">Target: 30+ trips</div><div class="metric-status ${trips >= 30 ? 'status-ok' : 'status-behind'}">${trips >= 30 ? '[OK]' : '[Behind]'}</div></div>
+                <div class="metric-card"><div class="metric-value">${ar}%</div><div class="metric-label">Acceptance Rate</div><div class="metric-target">Target: 80%+</div><div class="metric-status ${ar >= 80 ? 'status-ok' : 'status-behind'}">${ar >= 80 ? '[OK]' : '[Behind]'}</div></div>
+                <div class="metric-card"><div class="metric-value">${cr}%</div><div class="metric-label">Cancellation Rate</div><div class="metric-target">Max: 5%</div><div class="metric-status ${cr <= 5 ? 'status-ok' : 'status-behind'}">${cr <= 5 ? '[OK]' : '[Behind]'}</div></div>`;
+            const hrsNeeded = Math.max(TARGETS.hours - hrs, 0);
+            const tripsNeeded = Math.max(TARGETS.trips - trips, 0);
+            let remainingHtml = '';
+            if (hrsNeeded > 0) remainingHtml += `<div class="remaining-item"><span class="remaining-label">Hours needed</span><span class="remaining-value">${hrsNeeded} hrs</span></div>`;
+            if (tripsNeeded > 0) remainingHtml += `<div class="remaining-item"><span class="remaining-label">Trips needed</span><span class="remaining-value">${tripsNeeded} trips</span></div>`;
+            if (ar < 80) remainingHtml += `<div class="remaining-item"><span class="remaining-label">Acceptance Rate gap</span><span class="remaining-value">${80 - ar}% to reach 80%</span></div>`;
+            if (cr > 5) remainingHtml += `<div class="remaining-item"><span class="remaining-label">Cancellation rate</span><span class="remaining-value">${cr - 5}% above target</span></div>`;
+            if (!remainingHtml) remainingHtml = '<p style="color: #2e7d32; font-weight: 600;">All targets met! Keep up the great work!</p>';
+            document.getElementById('d-remaining').innerHTML = remainingHtml;
+            document.getElementById('d-coaching').textContent = driver['Coaching Message'] || 'Keep pushing - you\'ve got this!';
+        }
+
+        function showTeamView(team, data) {
+            const teamData = TEAMS[team];
+            const teamDrivers = allDrivers.filter(d => d.Team === team);
+            document.getElementById('confirm-view').classList.add('hidden');
+            document.getElementById('team-view').classList.remove('hidden');
+            document.getElementById('t-title').textContent = team + ' Performance';
+            document.getElementById('t-leader').textContent = 'Team Leader: ' + (teamData?.leader || 'N/A');
+            const avgScore = teamDrivers.length > 0 ? Math.round(teamDrivers.reduce((sum, d) => sum + (d.Score || 0), 0) / teamDrivers.length) : 0;
+            const compliant = teamDrivers.filter(d => d['KPI Met'] === 'YES').length;
+            document.getElementById('t-stats').innerHTML = `
+                <div class="stat-card"><div class="stat-value">${teamDrivers.length}</div><div class="stat-label">Active Drivers</div></div>
+                <div class="stat-card"><div class="stat-value">${avgScore}</div><div class="stat-label">Avg Score</div></div>
+                <div class="stat-card"><div class="stat-value">${compliant}</div><div class="stat-label">KPI Compliant</div></div>
+                <div class="stat-card"><div class="stat-value">${teamDrivers.length - compliant}</div><div class="stat-label">Needs Support</div></div>`;
+            const sortedDrivers = [...teamDrivers].sort((a, b) => (b.Score || 0) - (a.Score || 0));
+            document.getElementById('t-drivers').innerHTML = sortedDrivers.map(d => {
+                const score = d.Score || 0;
+                const scoreClass = score >= 85 ? 'score-high' : (score >= 50 ? 'score-medium' : 'score-low');
+                return `<div class="driver-list-item"><div class="driver-info"><div class="driver-name">${d.Driver}</div><div class="driver-team">${d.Status || 'N/A'}</div></div><div class="driver-score ${scoreClass}">${score}</div></div>`;
+            }).join('');
+        }
+
+        function showFleetView(data) {
+            document.getElementById('confirm-view').classList.add('hidden');
+            document.getElementById('fleet-view').classList.remove('hidden');
+            const totalDrivers = allDrivers.length;
+            const avgScore = totalDrivers > 0 ? Math.round(allDrivers.reduce((sum, d) => sum + (d.Score || 0), 0) / totalDrivers) : 0;
+            const topPerformers = allDrivers.filter(d => (d.Score || 0) >= 85).length;
+            const needsAttention = allDrivers.filter(d => (d.Score || 0) < 70).length;
+            const compliant = allDrivers.filter(d => d['KPI Met'] === 'YES').length;
+            document.getElementById('f-insights').innerHTML = `
+                <div class="insight-row"><span>Fleet Average Score</span><span><strong>${avgScore}/100</strong></span></div>
+                <div class="insight-row"><span>Total Active Drivers</span><span><strong>${totalDrivers}</strong></span></div>
+                <div class="insight-row"><span>Top Performers (85+)</span><span><strong>${topPerformers}</strong></span></div>
+                <div class="insight-row"><span>KPI Compliant</span><span><strong>${compliant}/${totalDrivers}</strong></span></div>
+                <div class="insight-row"><span>Needs Attention</span><span><strong>${needsAttention}</strong></span></div>`;
+            let teamsHtml = '';
+            Object.keys(TEAMS).forEach(teamName => {
+                const teamDrivers = allDrivers.filter(d => d.Team === teamName);
+                teamsHtml += `<div class="driver-list-item"><div class="driver-info"><div class="driver-name">${teamName}</div><div class="driver-team">Leader: ${TEAMS[teamName].leader} | ${teamDrivers.length} drivers</div></div><a href="?mode=team&team=${encodeURIComponent(teamName)}&week=${encodeURIComponent(weekLabel)}" class="btn" style="margin: 0;">View Team</a></div>`;
+            });
+            document.getElementById('f-teams').innerHTML = teamsHtml;
+            let linksHtml = `<a href="?mode=fleet" class="btn btn-secondary">Fleet Overview</a>`;
+            Object.keys(TEAMS).forEach(teamName => { linksHtml += `<a href="?mode=team&team=${encodeURIComponent(teamName)}" class="btn">${teamName}</a>`; });
+            document.getElementById('f-links').innerHTML = linksHtml;
+            filterFleetDrivers();
+        }
+
+        function filterFleetDrivers() {
+            const query = document.getElementById('f-search').value.toLowerCase();
+            const filtered = query.length < 2 ? allDrivers : allDrivers.filter(d => d.Driver.toLowerCase().includes(query));
+            const sorted = [...filtered].sort((a, b) => (b.Score || 0) - (a.Score || 0)).slice(0, 20);
+            document.getElementById('f-drivers').innerHTML = sorted.map(d => {
+                const score = d.Score || 0;
+                const scoreClass = score >= 85 ? 'score-high' : (score >= 50 ? 'score-medium' : 'score-low');
+                return `<div class="driver-list-item"><div class="driver-info"><div class="driver-name">${d.Driver}</div><div class="driver-team">${d.Team || 'Unassigned'} | ${d.Status || 'N/A'}</div></div><a href="?mode=driver&name=${encodeURIComponent(d.Driver)}&week=${encodeURIComponent(weekLabel)}" class="btn" style="margin: 0; padding: 8px 16px; font-size: 12px;">View</a></div>`;
+            }).join('');
+        }
+    </script>
+</body>
+</html>

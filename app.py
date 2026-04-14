@@ -101,28 +101,89 @@ st.markdown("""
 
 
 # ─────────────────────────────────────────────
+# COLUMN SETS PER VIEW  ← keeps payloads lean
+# ─────────────────────────────────────────────
+
+# Drivers view needs coaching + remaining targets
+DRIVER_COLS = [
+    "Driver", "Team",
+    "Hours Online", "Trips Taken",
+    "Confirmation Rate", "Cancellation Rate",
+    "Score", "Status", "Coaching",
+    "Hours Needed", "Trips Needed",
+    "AR On Track", "CR On Track", "Hours On Track", "Trips On Track",
+    "KPI Met",
+]
+
+# Fleet / Team views only need display columns — no coaching or remaining targets
+FLEET_COLS = [
+    "Driver", "Team",
+    "Hours Online", "Trips Taken",
+    "Confirmation Rate", "Cancellation Rate",
+    "Score", "Status", "KPI Met",
+]
+
+# Short aliases to use inside the encoded payload (saves ~15-20% on raw JSON)
+_ENCODE_MAP = {
+    "Driver": "D", "Team": "T",
+    "Hours Online": "HO", "Trips Taken": "TT",
+    "Confirmation Rate": "AR", "Cancellation Rate": "CR",
+    "Score": "SC", "Status": "ST", "Coaching": "CO",
+    "Hours Needed": "HN", "Trips Needed": "TPN",
+    "AR On Track": "AOT", "CR On Track": "COT",
+    "Hours On Track": "HOT", "Trips On Track": "TOT",
+    "KPI Met": "KM",
+}
+_DECODE_MAP = {v: k for k, v in _ENCODE_MAP.items()}
+
+
+# ─────────────────────────────────────────────
 # ENCODE / DECODE HELPERS
 # ─────────────────────────────────────────────
-def encode_data(df):
-    """Compress a DataFrame to a URL-safe base64 string."""
-    raw    = df.to_json(orient="records")
-    compressed = gzip.compress(raw.encode("utf-8"))
+def _round_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Round floats before encoding to shrink JSON payload."""
+    df = df.copy()
+    for col in df.select_dtypes(include="float").columns:
+        if col in ("Confirmation Rate", "Cancellation Rate"):
+            df[col] = df[col].round(4)          # 4 dp is plenty for a rate
+        elif col in ("Hours Online",):
+            df[col] = df[col].round(1)
+        elif col in ("Score",):
+            df[col] = df[col].round(1)
+        else:
+            df[col] = df[col].round(2)
+    return df
+
+
+def encode_data(df: pd.DataFrame, cols: list) -> str:
+    """
+    Select `cols`, rename to short aliases, round floats,
+    compress and return a URL-safe base64 string.
+    """
+    subset = _round_df(df[cols])
+    subset = subset.rename(columns=_ENCODE_MAP)
+    raw = subset.to_json(orient="records")
+    compressed = gzip.compress(raw.encode("utf-8"), compresslevel=9)
     return base64.urlsafe_b64encode(compressed).decode("utf-8")
 
 
-def decode_data(encoded):
+def decode_data(encoded: str) -> pd.DataFrame:
     """Restore a DataFrame from a URL-safe base64 string."""
     compressed = base64.urlsafe_b64decode(encoded.encode("utf-8"))
-    raw        = gzip.decompress(compressed).decode("utf-8")
-    return pd.DataFrame(json.loads(raw))
+    raw = gzip.decompress(compressed).decode("utf-8")
+    df = pd.DataFrame(json.loads(raw))
+    df = df.rename(columns=_DECODE_MAP)
+    return df
 
 
-def make_link(view, df, team=None):
+def make_link(view: str, df: pd.DataFrame, cols: list, team: str = None) -> str:
     """Build a shareable Streamlit URL for the given view."""
-    base    = st.secrets.get("APP_URL",
-              "https://fleet-app-v25cphks3psbb94zeedjfq.streamlit.app")
-    encoded = encode_data(df)
-    params  = {"view": view, "data": encoded}
+    base = st.secrets.get(
+        "APP_URL",
+        "https://fleet-app-v25cphks3psbb94zeedjfq.streamlit.app"
+    )
+    encoded = encode_data(df, cols)
+    params = {"view": view, "data": encoded}
     if team:
         params["team"] = team
     return f"{base}/?{urllib.parse.urlencode(params)}"
@@ -176,7 +237,7 @@ def process_df(df):
         (df["Cancellation Rate"] <= 0.05) &
         (df["Trips Taken"]       >= 30)
     )
-    return df, get_week_progress()
+    return df, week_info
 
 
 def fmt_rate(val):
@@ -189,9 +250,9 @@ def fmt_rate(val):
 # ─────────────────────────────────────────────
 # VIEW ROUTER
 # ─────────────────────────────────────────────
-params = st.query_params
-view   = params.get("view", "admin")
-data   = params.get("data", None)
+params     = st.query_params
+view       = params.get("view", "admin")
+data       = params.get("data", None)
 team_param = params.get("team", None)
 
 
@@ -231,10 +292,10 @@ if view == "admin":
     # Summary
     st.subheader("Fleet Overview")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Drivers",         len(df))
-    c2.metric("Top Performers",        len(df[df["Score"] >= 85]))
-    c3.metric("Needs Attention",       len(df[(df["Score"] >= 50) & (df["Score"] < 70)]))
-    c4.metric("Needs Urgent Attention",len(df[df["Score"] < 50]))
+    c1.metric("Total Drivers",          len(df))
+    c2.metric("Top Performers",         len(df[df["Score"] >= 85]))
+    c3.metric("Needs Attention",        len(df[(df["Score"] >= 50) & (df["Score"] < 70)]))
+    c4.metric("Needs Urgent Attention", len(df[df["Score"] < 50]))
     st.divider()
 
     # Quick table preview
@@ -250,49 +311,43 @@ if view == "admin":
     # ── GENERATE LINKS ─────────────────────────────
     st.subheader("Generate Shareable Links")
 
-    # Columns to encode (keep it lean to reduce link size)
-    encode_cols = [
-        "Driver","Team","Hours Online","Trips Taken",
-        "Confirmation Rate","Cancellation Rate",
-        "Trips / hr","Earnings / hr",
-        "Score","Status","Coaching",
-        "Hours Needed","Trips Needed",
-        "AR On Track","CR On Track","Hours On Track","Trips On Track","KPI Met"
-    ]
-    lean_df = df[encode_cols].copy()
-
-    # 1. Drivers link
+    # 1. Drivers link  — needs full coaching payload
     st.markdown("#### 📱 Drivers Link")
     st.caption("Share this in your whole driver WhatsApp group. Each driver searches their own name.")
-    drivers_link = make_link("drivers", lean_df)
+    drivers_link = make_link("drivers", df, DRIVER_COLS)
     st.markdown(f'<div class="link-box">{drivers_link}</div>', unsafe_allow_html=True)
     st.code(drivers_link, language=None)
 
     st.divider()
 
-    # 2. Fleet / Management link
+    # 2. Fleet / Management link  — leaner payload (no coaching / remaining targets)
     st.markdown("#### 📊 Management Link")
     st.caption("Share with management. Shows full fleet stats, insights, and driver search.")
-    fleet_link = make_link("fleet", lean_df)
+    fleet_link = make_link("fleet", df, FLEET_COLS)
     st.markdown(f'<div class="link-box">{fleet_link}</div>', unsafe_allow_html=True)
     st.code(fleet_link, language=None)
 
     st.divider()
 
-    # 3. Team links
+    # 3. Team links  — only that team's rows + lean columns  ← biggest size saving
     st.markdown("#### 👥 Team Links")
     st.caption("Generate a link for each team. Share in the team's WhatsApp group.")
 
     for team_name in list(TEAMS.keys()):
-        team_df = lean_df[lean_df["Team"] == team_name]
+        team_df = df[df["Team"] == team_name]
         if team_df.empty:
             st.warning(f"{team_name}: no drivers found in this CSV.")
             continue
-        t_link = make_link("team", lean_df, team=team_name)
-        leader = TEAMS[team_name]["leader"]
-        n      = len(team_df)
-        kpi_n  = team_df["KPI Met"].sum() if "KPI Met" in team_df else 0
-        with st.expander(f"{team_name}  —  Leader: {leader}  |  {n} drivers  |  {kpi_n} KPI compliant"):
+
+        # ✅ Only encode THIS team's rows, and only fleet columns
+        t_link  = make_link("team", team_df, FLEET_COLS, team=team_name)
+        leader  = TEAMS[team_name]["leader"]
+        n       = len(team_df)
+        kpi_n   = int(team_df["KPI Met"].sum())
+
+        with st.expander(
+            f"{team_name}  —  Leader: {leader}  |  {n} drivers  |  {kpi_n} KPI compliant"
+        ):
             st.code(t_link, language=None)
 
 
@@ -300,7 +355,7 @@ if view == "admin":
 # DRIVERS VIEW
 # ═══════════════════════════════════════════
 elif view == "drivers" and data:
-    df = decode_data(data)
+    df        = decode_data(data)
     week_info = get_week_progress()
 
     st.markdown("# 🚛 SparklingBlu Moto — Your Weekly Stats")
@@ -313,7 +368,6 @@ elif view == "drivers" and data:
         st.info("Start typing your name above to see your stats.")
         st.stop()
 
-    # Case-insensitive search
     matches = df[df["Driver"].str.lower().str.contains(search.strip().lower(), na=False)]
 
     if matches.empty:
@@ -321,8 +375,8 @@ elif view == "drivers" and data:
         st.stop()
 
     if len(matches) > 1:
-        names   = matches["Driver"].tolist()
-        choice  = st.selectbox("Multiple matches — select your name:", names)
+        names  = matches["Driver"].tolist()
+        choice = st.selectbox("Multiple matches — select your name:", names)
         matches = matches[matches["Driver"] == choice]
 
     row = matches.iloc[0]
@@ -331,7 +385,6 @@ elif view == "drivers" and data:
     kpi    = bool(row["KPI Met"])
     status = str(row["Status"])
 
-    # Score colour
     if score >= 85:
         score_color = "#0a8a4e"
     elif score >= 70:
@@ -350,7 +403,6 @@ elif view == "drivers" and data:
     </div>
     """, unsafe_allow_html=True)
 
-    # KPI tiles
     st.markdown("### Your KPIs This Week")
     k1, k2, k3, k4 = st.columns(4)
 
@@ -377,7 +429,6 @@ elif view == "drivers" and data:
 
     st.divider()
 
-    # What still needed
     st.markdown("### What You Still Need By Sunday")
     n1, n2 = st.columns(2)
     hrs_left  = float(row["Hours Needed"])
@@ -405,7 +456,6 @@ elif view == "drivers" and data:
 
     st.divider()
 
-    # Coaching message
     st.markdown("### Coaching Message")
     st.info(str(row["Coaching"]))
     st.caption("SparklingBlu Moto Fleet Team 🚛")
@@ -415,19 +465,19 @@ elif view == "drivers" and data:
 # FLEET / MANAGEMENT VIEW
 # ═══════════════════════════════════════════
 elif view == "fleet" and data:
-    df = decode_data(data)
+    df        = decode_data(data)
     week_info = get_week_progress()
 
     st.markdown("# 📊 SparklingBlu Moto — Fleet Performance")
     st.markdown(f"*Management Overview  |  {week_info['day_name']}  |  {week_info['days_left']} day(s) left*")
     st.divider()
 
-    total      = len(df)
-    compliant  = int(df["KPI Met"].sum())
-    fleet_pct  = round((compliant / total) * 100) if total else 0
-    top        = len(df[df["Score"].astype(float) >= 85])
-    urgent     = len(df[df["Score"].astype(float) < 50])
-    avg_score  = round(df["Score"].astype(float).mean(), 1)
+    total     = len(df)
+    compliant = int(df["KPI Met"].sum())
+    fleet_pct = round((compliant / total) * 100) if total else 0
+    top       = len(df[df["Score"].astype(float) >= 85])
+    urgent    = len(df[df["Score"].astype(float) < 50])
+    avg_score = round(df["Score"].astype(float).mean(), 1)
     top_driver = df.loc[df["Score"].astype(float).idxmax(), "Driver"]
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -439,7 +489,6 @@ elif view == "fleet" and data:
 
     st.divider()
 
-    # Key Insights
     st.markdown("### Key Insights")
     i1, i2 = st.columns(2)
 
@@ -481,7 +530,6 @@ elif view == "fleet" and data:
 
     st.divider()
 
-    # Team compliance breakdown
     st.markdown("### Team Compliance")
     t_cols = st.columns(len(TEAMS))
     for i, (team_name, info) in enumerate(TEAMS.items()):
@@ -493,7 +541,6 @@ elif view == "fleet" and data:
 
     st.divider()
 
-    # Full driver table with search
     st.markdown("### Driver Search")
     search = st.text_input("Search by driver name or team:", placeholder="e.g. John or Team LB")
     display = df.copy()
@@ -522,14 +569,15 @@ elif view == "team" and data:
     df        = decode_data(data)
     week_info = get_week_progress()
 
-    # If team param provided, filter directly; otherwise let user choose
     if team_param and team_param in TEAMS:
         selected_team = team_param
     else:
         selected_team = st.selectbox("Select your team:", list(TEAMS.keys()))
 
-    leader   = TEAMS[selected_team]["leader"]
-    team_df  = df[df["Team"] == selected_team].copy()
+    leader  = TEAMS[selected_team]["leader"]
+    # The encoded data already contains only this team's rows,
+    # but filter defensively in case the fleet link is shared here
+    team_df = df[df["Team"] == selected_team].copy() if "Team" in df.columns else df.copy()
 
     st.markdown(f"# 👥 {selected_team} — Weekly Performance")
     st.markdown(f"*Team Leader: {leader}  |  {week_info['day_name']}  |  {week_info['days_left']} day(s) left*")
@@ -539,21 +587,20 @@ elif view == "team" and data:
         st.warning("No drivers found for this team in the current data.")
         st.stop()
 
-    t_total   = len(team_df)
-    t_comp    = int(team_df["KPI Met"].sum())
-    t_pct     = round((t_comp / t_total) * 100) if t_total else 0
-    t_avg     = round(team_df["Score"].astype(float).mean(), 1)
-    t_best    = team_df.loc[team_df["Score"].astype(float).idxmax(), "Driver"]
+    t_total = len(team_df)
+    t_comp  = int(team_df["KPI Met"].sum())
+    t_pct   = round((t_comp / t_total) * 100) if t_total else 0
+    t_avg   = round(team_df["Score"].astype(float).mean(), 1)
+    t_best  = team_df.loc[team_df["Score"].astype(float).idxmax(), "Driver"]
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Team Size",        t_total)
-    m2.metric("KPI Compliant",    f"{t_comp}/{t_total}")
-    m3.metric("Compliance Rate",  f"{t_pct}%")
-    m4.metric("Top Driver",       t_best)
+    m1.metric("Team Size",       t_total)
+    m2.metric("KPI Compliant",   f"{t_comp}/{t_total}")
+    m3.metric("Compliance Rate", f"{t_pct}%")
+    m4.metric("Top Driver",      t_best)
 
     st.divider()
 
-    # Team driver table
     display_cols = ["Driver","Hours Online","Trips Taken",
                     "Confirmation Rate","Cancellation Rate","Score","Status","KPI Met"]
     out = team_df[display_cols].copy()

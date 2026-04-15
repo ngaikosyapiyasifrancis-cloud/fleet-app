@@ -121,3 +121,20 @@ def match_drivers_to_teams(df):
     df = df.copy()
     df["Team"] = df["Driver"].apply(get_team_for_driver)
     return df
+
+
+def is_sbv_driver_dynamic(name, sbv_list):
+    """
+    Same as is_sbv_driver but uses a dynamic list instead of the hardcoded one.
+    Used when the user uploads a new Vehicle List Excel to override the default.
+    """
+    name_lower = name.strip().lower()
+    for sbv in sbv_list:
+        sbv_lower = str(sbv).strip().lower()
+        parts = sbv_lower.split()
+        if len(parts) >= 2:
+            if parts[0] in name_lower and parts[-1] in name_lower:
+                return True
+        if sbv_lower in name_lower or name_lower in sbv_lower:
+            return True
+    return False

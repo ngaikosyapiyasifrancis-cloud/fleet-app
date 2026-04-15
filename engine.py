@@ -1,30 +1,49 @@
 # engine.py
-# The brain of the Fleet Performance & Coaching System.
-# Scores and coaches drivers based on weekly targets.
+# Scoring and coaching logic for SparklingBlu Fleet Performance System.
+# Targets: 10h/day min | 5 trips/day min | 80%+ AR | max 5% CR | 50h/week total
+# Operating window: Mon-Sun, 5:00am - 7:30pm
 
-import urllib.parse
-import base64
-import json
+from datetime import datetime
 
-# --- WEEKLY TARGETS ---
+# ── WEEKLY TARGETS ────────────────────────────────────────────────────────────
 WEEKLY_TARGETS = {
-    "hours":        50.0,
-    "acceptance":   0.80,
-    "cancellation": 0.05,
-    "trips":        30,
+    "hours":        50.0,   # minimum total hours per week
+    "acceptance":   0.80,   # minimum acceptance rate
+    "cancellation": 0.05,   # maximum cancellation rate
+    "trips":        30,     # minimum trips per week (changed from 20 to 30)
+    "daily_hours":  10.0,   # minimum hours per active day
+    "daily_trips":  5,      # minimum trips per active day
 }
+
+# Operating window
+SHIFT_START = 5      # 5:00 AM
+SHIFT_END   = 19.5   # 7:30 PM  (19h30)
+SHIFT_HOURS = SHIFT_END - SHIFT_START  # 14.5 hours available per day
 
 
 def get_week_progress():
-    """Works out how far through the current week we are."""
-    from datetime import datetime
-    now = datetime.now()
-    day_number  = now.weekday()
-    day_name    = now.strftime("%A")
-    hour        = now.hour
-    days_elapsed = day_number + (hour / 24)
+    """
+    Returns how far through the current Mon-Sun week we are.
+    Only counts time within the operating window (5am - 7:30pm).
+    """
+    now        = datetime.now()
+    day_number = now.weekday()   # Mon=0, Sun=6
+    day_name   = now.strftime("%A")
+    hour       = now.hour + now.minute / 60
+
+    # How far through today's shift are we?
+    if hour < SHIFT_START:
+        day_fraction = 0.0
+    elif hour > SHIFT_END:
+        day_fraction = 1.0
+    else:
+        day_fraction = (hour - SHIFT_START) / SHIFT_HOURS
+
+    # Total operating days elapsed this week
+    days_elapsed = day_number + day_fraction
     progress     = days_elapsed / 7
-    days_left = 6 - day_number
+
+    days_left    = 6 - day_number
 
     return {
         "day_number":   day_number,
@@ -32,263 +51,138 @@ def get_week_progress():
         "progress":     round(progress, 4),
         "days_elapsed": round(days_elapsed, 2),
         "days_left":    days_left,
+        "current_hour": round(hour, 2),
+        "in_shift":     SHIFT_START <= hour <= SHIFT_END,
     }
 
 
-def calculate_performance_score(confirmation_rate, cancellation_rate, trips_per_hr,
-                                  earnings_per_hr, hours_online, trips_taken, progress):
-    """Calculates a performance score (0 to 100) adjusted for week progress."""
-
-    # Acceptance Rate (30%)
-    ar_score = (confirmation_rate / WEEKLY_TARGETS["acceptance"]) * 100
-    ar_score = min(ar_score, 100) * 0.30
-
-    # Cancellation Rate (25%)
-    if cancellation_rate <= WEEKLY_TARGETS["cancellation"]:
-        cr_score = 100
-    else:
-        excess = (cancellation_rate - WEEKLY_TARGETS["cancellation"]) * 100
-        cr_score = max(100 - (excess * 20), 0)
-    cr_score = cr_score * 0.25
-
-    # Hours Progress (25%)
-    expected_hours = WEEKLY_TARGETS["hours"] * max(progress, 0.01)
-    hours_score = min((hours_online / expected_hours) * 100, 100) * 0.25
-
-    # Trips Progress (20%)
-    expected_trips = WEEKLY_TARGETS["trips"] * max(progress, 0.01)
-    trips_score = min((trips_taken / expected_trips) * 100, 100) * 0.20
-
-    total_score = ar_score + cr_score + hours_score + trips_score
-    return round(total_score, 1)
-
-
 def get_remaining_targets(hours_online, trips_taken, confirmation_rate,
-                           cancellation_rate, progress):
-    """Calculates what each driver still needs to achieve by Sunday 23:59."""
+                           cancellation_rate, progress, report_days=1):
+    """
+    Calculates what each driver still needs to hit by Sunday.
+
+    Parameters:
+    - hours_online       : hours online so far
+    - trips_taken        : trips completed so far
+    - confirmation_rate  : acceptance rate (0-1)
+    - cancellation_rate  : cancellation rate (0-1)
+    - progress           : week progress fraction
+    - report_days        : number of days this CSV covers (for daily averages)
+    """
     remaining = {}
 
-    hours_needed = max(WEEKLY_TARGETS["hours"] - hours_online, 0)
-    remaining["hours_needed"]    = round(hours_needed, 1)
-    remaining["hours_on_track"]  = hours_online >= (WEEKLY_TARGETS["hours"] * progress)
+    # Weekly remaining
+    remaining["hours_needed"]     = round(max(WEEKLY_TARGETS["hours"] - hours_online, 0), 1)
+    remaining["trips_needed"]     = max(WEEKLY_TARGETS["trips"] - int(trips_taken), 0)
+    remaining["hours_on_track"]   = hours_online >= (WEEKLY_TARGETS["hours"] * max(progress, 0.01))
+    remaining["trips_on_track"]   = trips_taken  >= (WEEKLY_TARGETS["trips"] * max(progress, 0.01))
 
-    trips_needed = max(WEEKLY_TARGETS["trips"] - trips_taken, 0)
-    remaining["trips_needed"]    = int(trips_needed)
-    remaining["trips_on_track"]  = trips_taken >= (WEEKLY_TARGETS["trips"] * progress)
+    # Daily averages
+    remaining["daily_hours_avg"]  = round(hours_online / max(report_days, 1), 1)
+    remaining["daily_trips_avg"]  = round(trips_taken  / max(report_days, 1), 1)
+    remaining["daily_hours_ok"]   = remaining["daily_hours_avg"] >= WEEKLY_TARGETS["daily_hours"]
+    remaining["daily_trips_ok"]   = remaining["daily_trips_avg"] >= WEEKLY_TARGETS["daily_trips"]
 
-    remaining["ar_on_track"]     = confirmation_rate >= WEEKLY_TARGETS["acceptance"]
-    remaining["ar_gap"]          = round(max(WEEKLY_TARGETS["acceptance"] - confirmation_rate, 0) * 100, 1)
-
-    remaining["cr_on_track"]     = cancellation_rate <= WEEKLY_TARGETS["cancellation"]
-    remaining["cr_gap"]          = round(max(cancellation_rate - WEEKLY_TARGETS["cancellation"], 0) * 100, 1)
+    # Rates
+    remaining["ar_on_track"]      = confirmation_rate >= WEEKLY_TARGETS["acceptance"]
+    remaining["ar_gap"]           = round(max(WEEKLY_TARGETS["acceptance"] - confirmation_rate, 0) * 100, 1)
+    remaining["cr_on_track"]      = cancellation_rate <= WEEKLY_TARGETS["cancellation"]
+    remaining["cr_gap"]           = round(max(cancellation_rate - WEEKLY_TARGETS["cancellation"], 0) * 100, 1)
 
     return remaining
 
 
+def calculate_performance_score(confirmation_rate, cancellation_rate,
+                                  hours_online, trips_taken,
+                                  progress, report_days=1):
+    """
+    Calculates a performance score (0-100) based on real targets.
+
+    Scoring breakdown:
+    - Acceptance Rate   : 30%  (must be 80%+)
+    - Cancellation Rate : 25%  (must be 5% or below)
+    - Daily Hours Avg   : 25%  (must average 10h/day)
+    - Daily Trips Avg   : 20%  (must average 5 trips/day)
+    """
+
+    # 1. Acceptance Rate (30%)
+    ar_score = min(confirmation_rate / WEEKLY_TARGETS["acceptance"], 1.0) * 100 * 0.30
+
+    # 2. Cancellation Rate (25%)
+    if cancellation_rate <= WEEKLY_TARGETS["cancellation"]:
+        cr_score = 100
+    else:
+        excess   = (cancellation_rate - WEEKLY_TARGETS["cancellation"]) * 100
+        cr_score = max(100 - (excess * 20), 0)
+    cr_score *= 0.25
+
+    # 3. Daily Hours Average (25%)
+    daily_hrs = hours_online / max(report_days, 1)
+    hrs_score = min(daily_hrs / WEEKLY_TARGETS["daily_hours"], 1.0) * 100 * 0.25
+
+    # 4. Daily Trips Average (20%)
+    daily_trp = trips_taken / max(report_days, 1)
+    trp_score = min(daily_trp / WEEKLY_TARGETS["daily_trips"], 1.0) * 100 * 0.20
+
+    total = ar_score + cr_score + hrs_score + trp_score
+    return round(total, 1)
+
+
+def kpi_fully_met(hours_online, trips_taken, confirmation_rate,
+                   cancellation_rate, report_days=1):
+    """Returns True only if ALL four KPI targets are fully met."""
+    daily_hrs = hours_online / max(report_days, 1)
+    daily_trp = trips_taken  / max(report_days, 1)
+    return (
+        confirmation_rate >= WEEKLY_TARGETS["acceptance"]   and
+        cancellation_rate <= WEEKLY_TARGETS["cancellation"] and
+        daily_hrs         >= WEEKLY_TARGETS["daily_hours"]  and
+        daily_trp         >= WEEKLY_TARGETS["daily_trips"]
+    )
+
+
 def get_coaching_message(score, remaining, week_info):
-    """Returns a status label and coaching message based on score and remaining targets."""
+    """
+    Returns (status, message) based on score, remaining targets, and day.
+    """
     day_name  = week_info["day_name"]
     days_left = week_info["days_left"]
 
     issues = []
-    if not remaining["hours_on_track"]:
-        issues.append(f"{remaining['hours_needed']} more hours online needed")
-    if not remaining["trips_on_track"]:
-        issues.append(f"{remaining['trips_needed']} more trips needed")
+    if not remaining["daily_hours_ok"]:
+        issues.append(
+            f"Averaging {remaining['daily_hours_avg']}h/day — need 10h/day minimum"
+        )
+    if not remaining["daily_trips_ok"]:
+        issues.append(
+            f"Averaging {remaining['daily_trips_avg']} trips/day — need 5 trips/day minimum"
+        )
     if not remaining["ar_on_track"]:
-        issues.append(f"AR is {remaining['ar_gap']}% below 80% minimum")
+        issues.append(f"AR is {remaining['ar_gap']}% below the 80% minimum")
     if not remaining["cr_on_track"]:
-        issues.append(f"CR is {remaining['cr_gap']}% above 5% maximum")
+        issues.append(f"CR is {remaining['cr_gap']}% above the 5% maximum")
+    if remaining["hours_needed"] > 0:
+        issues.append(f"{remaining['hours_needed']}h still needed for the week")
+    if remaining["trips_needed"] > 0:
+        issues.append(f"{remaining['trips_needed']} more trips needed for the week")
 
-    issue_text = " | ".join(issues) if issues else "All targets on track"
+    issue_text = "  |  ".join(issues) if issues else "All targets on track"
 
     if score >= 85:
         status  = "Top Performer"
-        message = f"Excellent work! You are ahead of targets. {issue_text}"
+        message = (f"Excellent work this {day_name}! "
+                   f"You are ahead of all your weekly targets. {issue_text}")
     elif score >= 70:
         status  = "Good"
-        message = f"Good progress. {days_left} day(s) left to finish strong. {issue_text}"
+        message = (f"Good progress. {days_left} day(s) left to finish strong. "
+                   f"{issue_text}")
     elif score >= 50:
         status  = "Needs Improvement"
-        message = f"You are falling behind. Only {days_left} day(s) left. {issue_text}"
+        message = (f"You are falling behind pace. Only {days_left} day(s) left. "
+                   f"{issue_text}")
     else:
         status  = "Urgent Attention"
-        message = f"Critical action needed! {days_left} day(s) left. {issue_text}"
+        message = (f"Critical — urgent action needed before Sunday. "
+                   f"{days_left} day(s) left. {issue_text}")
 
     return (status, message)
-
-
-# ---------------------------------------------------------------------------
-# LINK GENERATOR - Encodes data directly in URL
-# ---------------------------------------------------------------------------
-
-def encode_fleet_data(df, week_label=""):
-    """Encodes all fleet data to base64 for URL."""
-    # Convert DataFrame to list of dicts (JSON serializable)
-    drivers_data = []
-    for _, row in df.iterrows():
-        drivers_data.append({
-            "Driver": str(row.get("Driver", "")),
-            "Team": str(row.get("Team", "")),
-            "Score": float(row.get("Score", 0)),
-            "Status": str(row.get("Status", "")),
-            "KPI Met": str(row.get("KPI Met", "NO")),
-            "Hours Online": float(row.get("Hours Online", 0)),
-            "Trips Taken": int(row.get("Trips Taken", 0)),
-            "Confirmation Rate": float(row.get("Confirmation Rate", 0)),
-            "Cancellation Rate": float(row.get("Cancellation Rate", 0)),
-            "Earnings / hr": float(row.get("Earnings / hr", 0)),
-            "Total Earnings": float(row.get("Total Earnings", 0)),
-            "Coaching Message": str(row.get("Coaching Message", "")),
-        })
-
-    data = {
-        "week": week_label,
-        "drivers": drivers_data,
-        "targets": WEEKLY_TARGETS
-    }
-
-    json_str = json.dumps(data)
-    encoded = base64.b64encode(json_str.encode()).decode()
-    return encoded
-
-
-def generate_shareable_link(base_url, encoded_data, mode="fleet", name="", team=""):
-    """Generates a shareable link with encoded data."""
-    params = f"data={urllib.parse.quote(encoded_data)}&mode={mode}"
-    if name:
-        params += f"&name={urllib.parse.quote(name)}"
-    if team:
-        params += f"&team={urllib.parse.quote(team)}"
-    return f"{base_url.rstrip('/')}?{params}"
-
-
-def generate_driver_link(base_url, df, driver_name, week_label=""):
-    """Generates a shareable link for an individual driver."""
-    encoded = encode_fleet_data(df, week_label)
-    return generate_shareable_link(base_url, encoded, mode="driver", name=driver_name)
-
-
-def generate_team_link(base_url, df, team_name, week_label=""):
-    """Generates a shareable link for a team."""
-    encoded = encode_fleet_data(df, week_label)
-    return generate_shareable_link(base_url, encoded, mode="team", team=team_name)
-
-
-def generate_fleet_link(base_url, df, week_label=""):
-    """Generates a shareable link for the full fleet overview."""
-    encoded = encode_fleet_data(df, week_label)
-    return generate_shareable_link(base_url, encoded, mode="fleet")
-
-
-# ---------------------------------------------------------------------------
-# WHATSAPP MESSAGE GENERATOR
-# ---------------------------------------------------------------------------
-
-def generate_whatsapp_message(driver_name, score, status, remaining, week_info, row):
-    """Generates a WhatsApp message for a driver."""
-    day_name  = week_info["day_name"]
-    days_left = week_info["days_left"]
-
-    ar  = round((row.get("Confirmation Rate", 0)) * 100, 1)
-    cr  = round((row.get("Cancellation Rate", 0)) * 100, 1)
-    hrs = round(row.get("Hours Online", 0), 1)
-    trp = int(row.get("Trips Taken", 0))
-    eph = round(row.get("Earnings / hr", 0), 2)
-
-    hrs_ok  = "[OK]" if remaining["hours_on_track"] else "[X]"
-    trp_ok  = "[OK]" if remaining["trips_on_track"] else "[X]"
-    ar_ok   = "[OK]" if remaining["ar_on_track"] else "[X]"
-    cr_ok   = "[OK]" if remaining["cr_on_track"] else "[X]"
-
-    msg = f"""SPARKLINGBLU MOTO - WEEKLY PERFORMANCE
-================================
-Driver: {driver_name}
-Day: {day_name} | Days Left: {days_left}
-Score: {score}/100 | Status: {status}
-
-================================
-YOUR WEEKLY METRICS
-================================
-Hours Online: {hrs} hrs {hrs_ok} (min 50 hrs)
-Trips Taken: {trp} trips {trp_ok} (min 30 trips)
-Acceptance Rate: {ar}% {ar_ok} (must be 80%+)
-Cancellation Rate: {cr}% {cr_ok} (max 5%)
-Earnings / hr: R{eph}
-
-================================
-WHAT YOU NEED BY SUNDAY
-================================
-Hours needed: {remaining['hours_needed']} hrs
-Trips needed: {remaining['trips_needed']} trips
-{"[X] Keep accepting trips!" if not remaining['ar_on_track'] else "[OK] AR target met!"}
-{"[X] Reduce cancellations!" if not remaining['cr_on_track'] else "[OK] CR target met!"}
-
-Keep pushing - you've got this!
-SparklingBlu Moto Fleet Team"""
-
-    return msg
-
-
-def generate_bulk_whatsapp_message(df_summary, week_info):
-    """Generates a bulk WhatsApp message summarizing the fleet."""
-    day_name    = week_info["day_name"]
-    days_left   = week_info["days_left"]
-    total       = len(df_summary)
-    avg_score   = round(df_summary["Score"].mean(), 1)
-    top         = len(df_summary[df_summary["Score"] >= 85])
-    good        = len(df_summary[(df_summary["Score"] >= 70) & (df_summary["Score"] < 85)])
-    needs_imp   = len(df_summary[(df_summary["Score"] >= 50) & (df_summary["Score"] < 70)])
-    urgent      = len(df_summary[df_summary["Score"] < 50])
-    top_driver  = df_summary.loc[df_summary["Score"].idxmax(), "Driver"]
-    top_score   = df_summary["Score"].max()
-
-    msg = f"""SPARKLINGBLU MOTO - FLEET UPDATE
-================================
-{days_left} day(s) left this week
-Total Drivers: {total}
-Fleet Avg Score: {avg_score}/100
-
-================================
-PERFORMANCE BREAKDOWN
-================================
-Top Performers: {top}
-Good: {good}
-Needs Improvement: {needs_imp}
-Urgent Attention: {urgent}
-
-================================
-DRIVER OF THE WEEK
-================================
-{top_driver} - Score: {top_score}/100
-
-================================
-Targets: 50hrs | 80%+ AR | <=5% CR | 30+ trips
-SparklingBlu Moto Fleet Team"""
-
-    return msg
-
-
-def generate_team_whatsapp_message(team_name, team_df, week_info):
-    """Generates a WhatsApp message for a team's performance."""
-    days_left  = week_info["days_left"]
-    total      = len(team_df)
-    avg_score  = round(team_df["Score"].mean(), 1)
-    top        = len(team_df[team_df["Score"] >= 85])
-    needs_att  = len(team_df[team_df["Score"] < 70])
-    compliant  = len(team_df[team_df["KPI Met"] == "YES"])
-
-    msg = f"""SPARKLINGBLU - {team_name} UPDATE
-================================
-{days_left} day(s) left
-Team Members: {total}
-Avg Score: {avg_score}/100
-KPI Compliant: {compliant}/{total}
-
-Top Performers: {top}
-Needs Support: {needs_att}
-
-Keep pushing team!
-SparklingBlu Moto Fleet Team"""
-
-    return msg

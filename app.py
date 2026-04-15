@@ -39,9 +39,10 @@ st.markdown("""
 .insight-card { background:white; border-radius:12px; padding:14px 18px;
                 box-shadow:0 2px 8px rgba(0,0,0,.07); margin-bottom:10px;
                 font-size:15px; }
-.link-box { background:#e8f5e9; border-left:5px solid #25D366;
+.link-box { background:#0f2027; border-left:5px solid #25D366;
             border-radius:8px; padding:12px 16px; font-family:monospace;
-            font-size:13px; word-break:break-all; color:#111; margin-top:6px; }
+            font-size:13px; word-break:break-all; color:#25D366; margin-top:6px;
+            letter-spacing:0.3px; }
 .sbv-bar  { background:white; border-radius:12px; padding:16px 22px;
             border-left:5px solid #2c5364; margin-bottom:16px; }
 </style>

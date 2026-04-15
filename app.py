@@ -39,10 +39,7 @@ st.markdown("""
 .insight-card { background:white; border-radius:12px; padding:14px 18px;
                 box-shadow:0 2px 8px rgba(0,0,0,.07); margin-bottom:10px;
                 font-size:15px; }
-.link-box { background:#0f2027; border-left:5px solid #25D366;
-            border-radius:8px; padding:12px 16px; font-family:monospace;
-            font-size:13px; word-break:break-all; color:#25D366; margin-top:6px;
-            letter-spacing:0.3px; }
+
 .sbv-bar  { background:white; border-radius:12px; padding:16px 22px;
             border-left:5px solid #2c5364; margin-bottom:16px; }
 </style>
@@ -99,6 +96,11 @@ if view == "admin":
     col_a, col_b = st.columns([3, 1])
     with col_a:
         uploaded = st.file_uploader("Upload Uber CSV", type=["csv"])
+        sbv_file = st.file_uploader(
+            "Update SBV Driver List (optional — upload new Vehicle_List.xlsx to refresh)",
+            type=["xlsx"],
+            help="Upload your latest vehicle list Excel file to update the SBV driver list."
+        )
     with col_b:
         report_days = st.number_input(
             "Days this CSV covers", min_value=1, max_value=7, value=1,
@@ -108,6 +110,20 @@ if view == "admin":
             "Week label", value=datetime.now().strftime("%d %b %Y")
         )
 
+    # Handle SBV list update from uploaded Excel
+    if sbv_file is not None:
+        try:
+            sbv_xl = pd.read_excel(sbv_file)
+            if "Driver" in sbv_xl.columns:
+                new_sbv = sbv_xl["Driver"].dropna().str.strip().tolist()
+                # Save to session state so it's used for this upload
+                st.session_state["sbv_override"] = new_sbv
+                st.success(f"SBV list updated: {len(new_sbv)} drivers loaded from Excel.")
+            else:
+                st.warning("Excel file must have a 'Driver' column.")
+        except Exception as e:
+            st.error(f"Could not read Excel file: {e}")
+
     if uploaded is None:
         st.info("Upload your Uber driver CSV file to get started.")
         st.stop()
@@ -116,7 +132,15 @@ if view == "admin":
     raw = pd.read_csv(uploaded)
     raw["Driver"] = raw["Driver first name"] + " " + raw["Driver surname"]
     raw = match_drivers_to_teams(raw)
-    raw = mark_sbv_drivers(raw)
+    # Use uploaded SBV list if provided, otherwise use hardcoded list
+    if "sbv_override" in st.session_state:
+        from teams import is_sbv_driver_dynamic
+        override_list = st.session_state["sbv_override"]
+        raw["Is SBV"] = raw["Driver"].apply(
+            lambda n: is_sbv_driver_dynamic(n, override_list)
+        )
+    else:
+        raw = mark_sbv_drivers(raw)
 
     scores, statuses, coachings = [], [], []
     hrs_needed, trps_needed     = [], []
@@ -245,12 +269,12 @@ if view == "admin":
     with l1:
         st.markdown("**📱 Drivers Link** — share in your whole driver group")
         drivers_link = make_link("drivers")
-        st.markdown(f'<div class="link-box">{drivers_link}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="background:#0f2027; border-left:5px solid #25D366; border-radius:8px; padding:12px 16px; font-family:monospace; font-size:13px; word-break:break-all; color:#25D366; margin-top:6px; display:block; letter-spacing:0.3px;">{drivers_link}</div>', unsafe_allow_html=True)
 
     with l2:
         st.markdown("**📊 Management Link** — share with management")
         fleet_link = make_link("fleet")
-        st.markdown(f'<div class="link-box">{fleet_link}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="background:#0f2027; border-left:5px solid #25D366; border-radius:8px; padding:12px 16px; font-family:monospace; font-size:13px; word-break:break-all; color:#25D366; margin-top:6px; display:block; letter-spacing:0.3px;">{fleet_link}</div>', unsafe_allow_html=True)
 
     st.markdown("**👥 Team Links** — share each link in the team's WhatsApp group")
     t_cols = st.columns(len(TEAMS))
@@ -259,7 +283,7 @@ if view == "admin":
         with t_cols[i]:
             st.markdown(f"**{team_name}**")
             st.caption(f"Leader: {info['leader']}")
-            st.markdown(f'<div class="link-box">{tlink}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div style="background:#0f2027; border-left:5px solid #25D366; border-radius:8px; padding:12px 16px; font-family:monospace; font-size:13px; word-break:break-all; color:#25D366; margin-top:6px; display:block; letter-spacing:0.3px;">{tlink}</div>', unsafe_allow_html=True)
 
     st.divider()
 

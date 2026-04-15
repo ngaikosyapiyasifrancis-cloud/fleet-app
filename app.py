@@ -246,13 +246,11 @@ if view == "admin":
         st.markdown("**📱 Drivers Link** — share in your whole driver group")
         drivers_link = make_link("drivers")
         st.markdown(f'<div class="link-box">{drivers_link}</div>', unsafe_allow_html=True)
-        st.code(drivers_link, language=None)
 
     with l2:
         st.markdown("**📊 Management Link** — share with management")
         fleet_link = make_link("fleet")
         st.markdown(f'<div class="link-box">{fleet_link}</div>', unsafe_allow_html=True)
-        st.code(fleet_link, language=None)
 
     st.markdown("**👥 Team Links** — share each link in the team's WhatsApp group")
     t_cols = st.columns(len(TEAMS))
@@ -261,7 +259,7 @@ if view == "admin":
         with t_cols[i]:
             st.markdown(f"**{team_name}**")
             st.caption(f"Leader: {info['leader']}")
-            st.code(tlink, language=None)
+            st.markdown(f'<div class="link-box">{tlink}</div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -443,12 +441,11 @@ elif view == "fleet":
     avg_score = round(df["Score"].mean(), 1)
     top_driver= df.loc[df["Score"].idxmax(), "Driver"]
 
-    c1,c2,c3,c4,c5 = st.columns(5)
-    c1.metric("Total Drivers",    total)
-    c2.metric("Fleet Compliance", f"{fleet_pct}%")
-    c3.metric("Avg Score",        avg_score)
-    c4.metric("Top Performers",   top)
-    c5.metric("Urgent Attention", urgent)
+    c1,c2,c3,c4 = st.columns(4)
+    c1.metric("Total Drivers",          total)
+    c2.metric("Top Performers",         top)
+    c3.metric("Needs Attention",        len(df[(df["Score"] >= 50) & (df["Score"] < 70)]))
+    c4.metric("Needs Urgent Attention", urgent)
 
     st.divider()
     st.markdown("### Key Insights")

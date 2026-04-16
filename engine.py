@@ -1,241 +1,188 @@
-# engine.py — SparklingBlu Fleet Performance Engine
-# Weekly targets: 50h/week, 35 trips/week, 80% AR, 5% CR max
+# engine.py
+# Scoring and coaching logic for SparklingBlu Fleet Performance System.
+# Targets: 10h/day min | 5 trips/day min | 80%+ AR | max 5% CR | 50h/week total
+# Operating window: Mon-Sun, 5:00am - 7:30pm
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
-# Weekly targets based on 10h/day x 5 days = 50h/week, 5 trips/day x 7 days = 35 trips/week
+# ── WEEKLY TARGETS ────────────────────────────────────────────────────────────
 WEEKLY_TARGETS = {
-    "hours": 50,       # Target hours per week (10h/day * 5 days)
-    "trips": 35,       # Target trips per week (5 trips/day * 7 days)
-    "ar": 0.80,       # Acceptance Rate target (80%)
-    "cr": 0.05,       # Cancellation Rate max (5%)
-    "daily_hours": 10, # Daily hours target
-    "daily_trips": 5,  # Daily trips target
+    "hours":        50.0,   # minimum total hours per week
+    "acceptance":   0.80,   # minimum acceptance rate
+    "cancellation": 0.05,   # maximum cancellation rate
+    "trips":        30,     # minimum trips per week (changed from 20 to 30)
+    "daily_hours":  10.0,   # minimum hours per active day
+    "daily_trips":  5,      # minimum trips per active day
 }
 
+# Operating window
+SHIFT_START = 5      # 5:00 AM
+SHIFT_END   = 19.5   # 7:30 PM  (19h30)
+SHIFT_HOURS = SHIFT_END - SHIFT_START  # 14.5 hours available per day
+
+
 def get_week_progress():
-    """Calculate current week progress (Monday = start)"""
-    now = datetime.now()
-    # Find Monday of current week
-    days_since_monday = now.weekday()
-    monday = now - timedelta(days=days_since_monday)
-    monday = monday.replace(hour=0, minute=0, second=0, microsecond=0)
+    """
+    Returns how far through the current Mon-Sun week we are.
+    Only counts time within the operating window (5am - 7:30pm).
+    """
+    now        = datetime.now()
+    day_number = now.weekday()   # Mon=0, Sun=6
+    day_name   = now.strftime("%A")
+    hour       = now.hour + now.minute / 60
 
-    # End of week is Sunday 23:59:59
-    sunday = monday + timedelta(days=6, hours=23, minutes=59, seconds=59)
+    # How far through today's shift are we?
+    if hour < SHIFT_START:
+        day_fraction = 0.0
+    elif hour > SHIFT_END:
+        day_fraction = 1.0
+    else:
+        day_fraction = (hour - SHIFT_START) / SHIFT_HOURS
 
-    # Week days mapping
-    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    # Total operating days elapsed this week
+    days_elapsed = day_number + day_fraction
+    progress     = days_elapsed / 7
 
-    # Calculate progress
-    total_seconds = (sunday - monday).total_seconds()
-    elapsed_seconds = (now - monday).total_seconds()
-    progress = min(elapsed_seconds / total_seconds, 1.0)
-
-    days_left = max(0, (sunday.date() - now.date()).days)
-    current_day = now.weekday()
+    days_left    = 6 - day_number
 
     return {
-        "day_name": day_names[current_day],
-        "day_index": current_day + 1,  # 1-7
-        "progress": progress,
-        "days_left": days_left,
-        "week_start": monday.date().isoformat(),
-        "week_end": sunday.date().isoformat(),
+        "day_number":   day_number,
+        "day_name":     day_name,
+        "progress":     round(progress, 4),
+        "days_elapsed": round(days_elapsed, 2),
+        "days_left":    days_left,
+        "current_hour": round(hour, 2),
+        "in_shift":     SHIFT_START <= hour <= SHIFT_END,
     }
 
 
-def calculate_performance_score(ar, cr, hours, trips, week_progress, report_days=1):
+def get_remaining_targets(hours_online, trips_taken, confirmation_rate,
+                           cancellation_rate, progress, report_days=1):
     """
-    Calculate performance score (0-100) based on weekly targets.
+    Calculates what each driver still needs to hit by Sunday.
 
-    Score breakdown:
-    - Hours component (25 pts max): Based on weekly hours vs target
-    - Trips component (25 pts max): Based on weekly trips vs target
-    - AR component (25 pts max): Based on acceptance rate
-    - CR component (25 pts max): Based on cancellation rate
-
-    A driver with only 31 hours should NOT be a top performer.
-    Top performers need: high hours, high trips, high AR, low CR.
-    """
-    score = 0.0
-
-    # Hours score (25 pts) - Weekly hours target is 50
-    weekly_hours_target = WEEKLY_TARGETS["hours"]
-    hours_ratio = min(float(hours) / weekly_hours_target, 1.0)
-    hours_score = hours_ratio * 25
-
-    # Trips score (25 pts) - Weekly trips target is 35
-    weekly_trips_target = WEEKLY_TARGETS["trips"]
-    trips_ratio = min(float(trips) / weekly_trips_target, 1.0)
-    trips_score = trips_ratio * 25
-
-    # AR score (25 pts) - Target is 80%
-    ar_target = WEEKLY_TARGETS["ar"]
-    try:
-        ar_val = float(ar)
-    except:
-        ar_val = 0.0
-    ar_ratio = min(ar_val / ar_target, 1.0)
-    ar_score = ar_ratio * 25
-
-    # CR score (25 pts) - Max is 5%, lower is better
-    cr_max = WEEKLY_TARGETS["cr"]
-    try:
-        cr_val = float(cr)
-    except:
-        cr_val = 0.10  # Default high CR
-    # Invert: 0% CR = 25 pts, 5%+ CR = 0 pts
-    if cr_val <= cr_max:
-        cr_score = 25.0
-    else:
-        cr_score = max(0, 25 * (1 - (cr_val - cr_max) / 0.20))  # Gracefully handle high CR
-
-    score = hours_score + trips_score + ar_score + cr_score
-
-    return round(score, 1)
-
-
-def get_status(score):
-    """
-    Determine driver status based on score.
-    Top performers need BOTH high activity AND good rates.
-    """
-    if score >= 85:
-        return "Top Performer"
-    elif score >= 70:
-        return "Good"
-    elif score >= 50:
-        return "Needs Improvement"
-    else:
-        return "Needs Urgent Attention"
-
-
-def get_remaining_targets(hours, trips, ar, cr, week_progress, report_days=1):
-    """
-    Calculate remaining targets to meet weekly goals.
+    Parameters:
+    - hours_online       : hours online so far
+    - trips_taken        : trips completed so far
+    - confirmation_rate  : acceptance rate (0-1)
+    - cancellation_rate  : cancellation rate (0-1)
+    - progress           : week progress fraction
+    - report_days        : number of days this CSV covers (for daily averages)
     """
     remaining = {}
 
-    # Weekly hours remaining (target: 50)
-    try:
-        hrs = float(hours)
-    except:
-        hrs = 0.0
-    hours_needed = max(0, WEEKLY_TARGETS["hours"] - hrs)
-
-    # Weekly trips remaining (target: 35)
-    try:
-        trp = float(trips)
-    except:
-        trp = 0
-    trips_needed = max(0, int(WEEKLY_TARGETS["trips"] - trp))
-
-    # AR on track?
-    try:
-        ar_val = float(ar)
-    except:
-        ar_val = 0.0
-    ar_on_track = ar_val >= WEEKLY_TARGETS["ar"]
-
-    # CR on track?
-    try:
-        cr_val = float(cr)
-    except:
-        cr_val = 0.10
-    cr_on_track = cr_val <= WEEKLY_TARGETS["cr"]
-
-    # Hours on track? (considering day of week)
-    hours_on_track = hrs >= (WEEKLY_TARGETS["daily_hours"] * week_info()["day_index"])
-
-    # Trips on track? (considering day of week)
-    trips_on_track = trp >= (WEEKLY_TARGETS["daily_trips"] * week_info()["day_index"])
+    # Weekly remaining
+    remaining["hours_needed"]     = round(max(WEEKLY_TARGETS["hours"] - hours_online, 0), 1)
+    remaining["trips_needed"]     = max(WEEKLY_TARGETS["trips"] - int(trips_taken), 0)
+    remaining["hours_on_track"]   = hours_online >= (WEEKLY_TARGETS["hours"] * max(progress, 0.01))
+    remaining["trips_on_track"]   = trips_taken  >= (WEEKLY_TARGETS["trips"] * max(progress, 0.01))
 
     # Daily averages
-    day_index = week_info()["day_index"]
-    daily_hours_avg = hrs / day_index if day_index > 0 else 0
-    daily_trips_avg = trp / day_index if day_index > 0 else 0
+    remaining["daily_hours_avg"]  = round(hours_online / max(report_days, 1), 1)
+    remaining["daily_trips_avg"]  = round(trips_taken  / max(report_days, 1), 1)
+    remaining["daily_hours_ok"]   = remaining["daily_hours_avg"] >= WEEKLY_TARGETS["daily_hours"]
+    remaining["daily_trips_ok"]   = remaining["daily_trips_avg"] >= WEEKLY_TARGETS["daily_trips"]
 
-    remaining["hours_needed"] = round(hours_needed, 1)
-    remaining["trips_needed"] = trips_needed
-    remaining["ar_on_track"] = ar_on_track
-    remaining["cr_on_track"] = cr_on_track
-    remaining["hours_on_track"] = hours_on_track
-    remaining["trips_on_track"] = trips_on_track
-    remaining["daily_hours_avg"] = round(daily_hours_avg, 1)
-    remaining["daily_trips_avg"] = round(daily_trips_avg, 1)
+    # Rates
+    remaining["ar_on_track"]      = confirmation_rate >= WEEKLY_TARGETS["acceptance"]
+    remaining["ar_gap"]           = round(max(WEEKLY_TARGETS["acceptance"] - confirmation_rate, 0) * 100, 1)
+    remaining["cr_on_track"]      = cancellation_rate <= WEEKLY_TARGETS["cancellation"]
+    remaining["cr_gap"]           = round(max(cancellation_rate - WEEKLY_TARGETS["cancellation"], 0) * 100, 1)
 
     return remaining
 
 
-def week_info():
-    """Helper to get week info without passing around"""
-    return get_week_progress()
-
-
-def get_coaching_message(score, remaining, week_info_data):
-    """Generate coaching message based on performance"""
-    status = get_status(score)
-    coaching = ""
-
-    if status == "Top Performer":
-        coaching = "Excellent work! You're meeting or exceeding all weekly targets. Keep up the great effort!"
-    elif status == "Good":
-        coaching = "Good progress! You're on track in some areas. Focus on any remaining KPIs to reach top performer status."
-    elif status == "Needs Improvement":
-        gaps = []
-        if not remaining["hours_on_track"]:
-            gaps.append(f"hours ({remaining['hours_needed']} hrs short)")
-        if not remaining["trips_on_track"]:
-            gaps.append(f"trips ({remaining['trips_needed']} trips short)")
-        if not remaining["ar_on_track"]:
-            gaps.append("acceptance rate")
-        if not remaining["cr_on_track"]:
-            gaps.append("cancellation rate")
-
-        if gaps:
-            coaching = f"Focus areas: {' | '.join(gaps)}. You have {week_info_data['days_left']} day(s) left to improve."
-        else:
-            coaching = f"You're close to top performer! Keep up your current pace. {week_info_data['days_left']} day(s) left."
-    else:  # Needs Urgent Attention
-        coaching = f"URGENT: Multiple KPIs need immediate attention. Please reach out to your team leader for support. {week_info_data['days_left']} day(s) left this week."
-
-    return status, coaching
-
-
-def kpi_fully_met(hours, trips, ar, cr, report_days=1):
+def calculate_performance_score(confirmation_rate, cancellation_rate,
+                                  hours_online, trips_taken,
+                                  progress, report_days=1):
     """
-    Check if ALL weekly KPIs are fully met.
-    To be KPI compliant, driver needs:
-    - Weekly hours >= 50 (or appropriate for day of week)
-    - Weekly trips >= 35 (or appropriate for day of week)
-    - AR >= 80%
-    - CR <= 5%
+    Calculates a performance score (0-100) based on real targets.
+
+    Scoring breakdown:
+    - Acceptance Rate   : 30%  (must be 80%+)
+    - Cancellation Rate : 25%  (must be 5% or below)
+    - Daily Hours Avg   : 25%  (must average 10h/day)
+    - Daily Trips Avg   : 20%  (must average 5 trips/day)
     """
-    try:
-        hrs = float(hours)
-    except:
-        hrs = 0.0
 
-    try:
-        trp = float(trips)
-    except:
-        trp = 0
+    # 1. Acceptance Rate (30%)
+    ar_score = min(confirmation_rate / WEEKLY_TARGETS["acceptance"], 1.0) * 100 * 0.30
 
-    try:
-        ar_val = float(ar)
-    except:
-        ar_val = 0.0
+    # 2. Cancellation Rate (25%)
+    if cancellation_rate <= WEEKLY_TARGETS["cancellation"]:
+        cr_score = 100
+    else:
+        excess   = (cancellation_rate - WEEKLY_TARGETS["cancellation"]) * 100
+        cr_score = max(100 - (excess * 20), 0)
+    cr_score *= 0.25
 
-    try:
-        cr_val = float(cr)
-    except:
-        cr_val = 0.10
+    # 3. Daily Hours Average (25%)
+    daily_hrs = hours_online / max(report_days, 1)
+    hrs_score = min(daily_hrs / WEEKLY_TARGETS["daily_hours"], 1.0) * 100 * 0.25
 
-    # All KPIs must be met
-    hours_ok = hrs >= WEEKLY_TARGETS["hours"]
-    trips_ok = trp >= WEEKLY_TARGETS["trips"]
-    ar_ok = ar_val >= WEEKLY_TARGETS["ar"]
-    cr_ok = cr_val <= WEEKLY_TARGETS["cr"]
+    # 4. Daily Trips Average (20%)
+    daily_trp = trips_taken / max(report_days, 1)
+    trp_score = min(daily_trp / WEEKLY_TARGETS["daily_trips"], 1.0) * 100 * 0.20
 
-    return hours_ok and trips_ok and ar_ok and cr_ok
+    total = ar_score + cr_score + hrs_score + trp_score
+    return round(total, 1)
+
+
+def kpi_fully_met(hours_online, trips_taken, confirmation_rate,
+                   cancellation_rate, report_days=1):
+    """Returns True only if ALL four KPI targets are fully met."""
+    daily_hrs = hours_online / max(report_days, 1)
+    daily_trp = trips_taken  / max(report_days, 1)
+    return (
+        confirmation_rate >= WEEKLY_TARGETS["acceptance"]   and
+        cancellation_rate <= WEEKLY_TARGETS["cancellation"] and
+        daily_hrs         >= WEEKLY_TARGETS["daily_hours"]  and
+        daily_trp         >= WEEKLY_TARGETS["daily_trips"]
+    )
+
+
+def get_coaching_message(score, remaining, week_info):
+    """
+    Returns (status, message) based on score, remaining targets, and day.
+    """
+    day_name  = week_info["day_name"]
+    days_left = week_info["days_left"]
+
+    issues = []
+    if not remaining["daily_hours_ok"]:
+        issues.append(
+            f"Averaging {remaining['daily_hours_avg']}h/day — need 10h/day minimum"
+        )
+    if not remaining["daily_trips_ok"]:
+        issues.append(
+            f"Averaging {remaining['daily_trips_avg']} trips/day — need 5 trips/day minimum"
+        )
+    if not remaining["ar_on_track"]:
+        issues.append(f"AR is {remaining['ar_gap']}% below the 80% minimum")
+    if not remaining["cr_on_track"]:
+        issues.append(f"CR is {remaining['cr_gap']}% above the 5% maximum")
+    if remaining["hours_needed"] > 0:
+        issues.append(f"{remaining['hours_needed']}h still needed for the week")
+    if remaining["trips_needed"] > 0:
+        issues.append(f"{remaining['trips_needed']} more trips needed for the week")
+
+    issue_text = "  |  ".join(issues) if issues else "All targets on track"
+
+    if score >= 85:
+        status  = "Top Performer"
+        message = (f"Excellent work this {day_name}! "
+                   f"You are ahead of all your weekly targets. {issue_text}")
+    elif score >= 70:
+        status  = "Good"
+        message = (f"Good progress. {days_left} day(s) left to finish strong. "
+                   f"{issue_text}")
+    elif score >= 50:
+        status  = "Needs Improvement"
+        message = (f"You are falling behind pace. Only {days_left} day(s) left. "
+                   f"{issue_text}")
+    else:
+        status  = "Urgent Attention"
+        message = (f"Critical — urgent action needed before Sunday. "
+                   f"{days_left} day(s) left. {issue_text}")
+
+    return (status, message)

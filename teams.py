@@ -73,7 +73,7 @@ TEAMS = {
     "Team SV": {
         "leader": "Sabelo Vumasi",
         "drivers": [
-            "Sabelo Vumasi", "Siphesihle Mdebuka", "Mgcini Moyo",
+            "Sabelo Vumasi","BLESSINGS ZUZE", "Siphesihle Mdebuka", "Mgcini Moyo",
             "Vinicent Tonex", "Gilbert Babou Kapanda", "Idelito Valexy",
             "Matata Samuel Netshandama", "Robert Nzuy Ngamuna",
             "Davie Nkhoma Staliko", "Samuel German", "Kado Genuen",
@@ -95,7 +95,7 @@ TEAMS = {
     "Team LB": {
         "leader": "Lester Gilamoto Banda",
         "drivers": [
-            "Lester Gilamoto Banda", "Bright Jere", "Jolter Ndlovu",
+            "Lester Gilamoto Banda","MPENDULO INNOCENT MPILA","Vusi Rodgers Mtwiche", "Bright Jere", "Jolter Ndlovu",
             "Nelson Zangirai", "Francis Phwitiko", "Jefule Mustafa",
             "Winson Mwasinga", "Paulo Antonio", "Akimu Soko",
             "Ishmael Mussah", "Faidon Safali", "Ibrahim Rishard",

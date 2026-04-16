@@ -95,6 +95,13 @@ def fmt_bool(v):
     if v is False or v == 0 or v == "False": return "NO"
     return str(v)
 
+def fmt_hours_weekly(v):
+    """Format hours online as weekly total (e.g., '45 hrs')"""
+    try:
+        return f"{round(float(v))} hrs"
+    except:
+        return str(v)
+
 BASE_URL = "https://fleet-app-v25cphks3psbb94zeedjfq.streamlit.app"
 
 def make_link(view, team=None):
@@ -261,6 +268,9 @@ if view == "admin":
         prev = df[["Driver","Team","Is SBV","Hours Online","Daily Hrs Avg",
                    "Trips Taken","Daily Trips Avg",
                    "Confirmation Rate","Cancellation Rate","Score","Status","KPI Met"]].copy()
+        # Rename for display: use Hours Online column with weekly formatting instead of Daily Hrs Avg
+        prev["Hours Online (weekly)"] = prev["Hours Online"].apply(fmt_hours_weekly)
+        prev = prev.drop(columns=["Hours Online", "Daily Hrs Avg"])
         prev["Confirmation Rate"] = prev["Confirmation Rate"].apply(fmt_rate)
         prev["Cancellation Rate"] = prev["Cancellation Rate"].apply(fmt_rate)
         prev["KPI Met"]           = prev["KPI Met"].apply(fmt_bool)
@@ -436,8 +446,10 @@ elif view == "drivers":
         icon = "✅" if on_track else "❌"
         col.metric(f"{icon} {label}", value, target)
 
-    kpi_tile(k1, "Daily Hours Avg",
-             f"{row['Daily Hrs Avg']}h/day", "Target: 10h/day min",
+    # Use Hours Online column with weekly formatting
+    hours_online_val = fmt_hours_weekly(row["Hours Online"])
+    kpi_tile(k1, "Hours Online (weekly)",
+             hours_online_val, "Target: 50h/week min",
              bool(row.get("Hours On Track", False)))
     kpi_tile(k2, "Daily Trips Avg",
              f"{row['Daily Trips Avg']}/day", "Target: 5 trips/day min",
@@ -537,8 +549,10 @@ elif view == "fleet":
         high_cr = (df["Cancellation Rate"].astype(float) > 0.05).sum()
         insight(i1, f"⚠️ <strong>{high_cr} driver(s)</strong> above 5% cancellation rate")
     with i2:
-        low_dhrs = (df["Daily Hrs Avg"].astype(float) < 10).sum()
-        insight(i2, f"⏱️ <strong>{low_dhrs} driver(s)</strong> averaging below 10h/day")
+        # Calculate drivers below weekly hours target (using Daily Hrs Avg * report_days < 50)
+        report_days = data.get("report_days", 7)
+        low_dhrs = (df["Daily Hrs Avg"].astype(float) * report_days < 50).sum()
+        insight(i2, f"⏱️ <strong>{low_dhrs} driver(s)</strong> below 50 hrs/week target")
         low_dtrp = (df["Daily Trips Avg"].astype(float) < 5).sum()
         insight(i2, f"🚗 <strong>{low_dtrp} driver(s)</strong> averaging below 5 trips/day")
         insight(i2, f"✅ <strong>{compliant}/{total}</strong> drivers fully KPI compliant ({fleet_pct}%)")
@@ -563,11 +577,15 @@ elif view == "fleet":
                 display["Team"].str.lower().str.contains(search.lower(), na=False))
         display = display[mask]
 
-    out = display[["Driver","Team","Daily Hrs Avg","Daily Trips Avg",
+    # Display Hours Online (weekly) instead of Daily Hrs Avg
+    out = display[["Driver","Team","Hours Online","Daily Trips Avg",
                    "Confirmation Rate","Cancellation Rate","Score","Status","KPI Met"]].copy()
+    out["Hours Online"] = out["Hours Online"].apply(fmt_hours_weekly)
     out["Confirmation Rate"] = out["Confirmation Rate"].apply(fmt_rate)
     out["Cancellation Rate"] = out["Cancellation Rate"].apply(fmt_rate)
     out["KPI Met"]           = out["KPI Met"].apply(fmt_bool)
+    # Rename column header for display
+    out = out.rename(columns={"Hours Online": "Hours Online (weekly)"})
     st.dataframe(out.sort_values("Score", ascending=False),
                  use_container_width=True, hide_index=True)
 
@@ -619,11 +637,15 @@ elif view == "team":
 
     st.divider()
 
-    out = team_df[["Driver","Daily Hrs Avg","Daily Trips Avg",
+    # Display Hours Online (weekly) instead of Daily Hrs Avg
+    out = team_df[["Driver","Hours Online","Daily Trips Avg",
                    "Confirmation Rate","Cancellation Rate","Score","Status","KPI Met"]].copy()
+    out["Hours Online"] = out["Hours Online"].apply(fmt_hours_weekly)
     out["Confirmation Rate"] = out["Confirmation Rate"].apply(fmt_rate)
     out["Cancellation Rate"] = out["Cancellation Rate"].apply(fmt_rate)
     out["KPI Met"]           = out["KPI Met"].apply(fmt_bool)
+    # Rename column header for display
+    out = out.rename(columns={"Hours Online": "Hours Online (weekly)"})
     st.dataframe(out.sort_values("Score", ascending=False),
                  use_container_width=True, hide_index=True)
     st.caption(f"SparklingBlu Moto  |  {datetime.now().strftime('%d %b %Y %H:%M')}")

@@ -84,7 +84,7 @@ TEAMS = {
     "Team SS": {
         "leader": "Stephen Mohali",
         "drivers": [
-            "Stephen Mohali", "Sanele Sydwell Nkosi", "Nathan Ronald Nanchu",
+            "Stephen Mohali","Ramsey Mdumuka", "Sanele Sydwell Nkosi", "Nathan Ronald Nanchu",
             "Lebohang Molefe", "Sakhele Siboniso Percy Mabuza",
             "Lucas Inkosinathi Dhlamini", "Katleho Mahase Mahamo",
             "Lehlohonolo Lucky-Boy Moloi", "Nekias Nkiwane", "Vuyisa Mdebuka",

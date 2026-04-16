@@ -22,26 +22,66 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-[data-testid="stAppViewContainer"]  { background:#f0f4f8; }
-[data-testid="stMetric"]            { background:white; border-radius:14px;
-                                      padding:18px 22px; text-align:center;
-                                      box-shadow:0 2px 10px rgba(0,0,0,.07); }
-[data-testid="stMetricLabel"]       { font-size:12px!important; font-weight:800!important;
-                                      color:#203a43!important; text-transform:uppercase;
-                                      letter-spacing:.6px; }
-[data-testid="stMetricValue"]       { font-size:32px!important; font-weight:900!important;
-                                      color:#0f2027!important; }
-.banner { background:linear-gradient(90deg,#0f2027,#203a43,#2c5364);
-          color:white; padding:14px 22px; border-radius:12px;
-          margin-bottom:18px; font-size:14px; }
-.driver-card { background:white; border-radius:16px; padding:28px 32px;
-               box-shadow:0 4px 20px rgba(0,0,0,.10); margin-bottom:18px; }
-.insight-card { background:white; border-radius:12px; padding:14px 18px;
-                box-shadow:0 2px 8px rgba(0,0,0,.07); margin-bottom:10px;
-                font-size:15px; }
+/* ── App background ── */
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"], .main { background:#f0f4f8 !important; }
 
-.sbv-bar  { background:white; border-radius:12px; padding:16px 22px;
-            border-left:5px solid #2c5364; margin-bottom:16px; }
+/* ── Force ALL body text dark ── */
+[data-testid="stAppViewContainer"] p,
+[data-testid="stAppViewContainer"] span,
+[data-testid="stAppViewContainer"] div,
+[data-testid="stAppViewContainer"] label,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] li { color:#0f2027 !important; }
+
+/* ── Headings ── */
+h1, h2, h3 { color:#0f2027 !important; }
+
+/* ── Metric cards ── */
+[data-testid="stMetric"] {
+    background:white !important; border-radius:14px !important;
+    padding:18px 22px !important; text-align:center !important;
+    box-shadow:0 2px 10px rgba(0,0,0,.10) !important;
+}
+[data-testid="stMetricLabel"] > div {
+    font-size:12px !important; font-weight:800 !important;
+    color:#203a43 !important; text-transform:uppercase !important;
+    letter-spacing:.6px !important;
+}
+[data-testid="stMetricValue"] > div {
+    font-size:32px !important; font-weight:900 !important;
+    color:#0f2027 !important;
+}
+
+/* ── Alert / info boxes ── */
+[data-testid="stAlert"] p,
+[data-testid="stAlert"] span { color:#0f2027 !important; }
+
+/* ── Input fields ── */
+[data-testid="stTextInput"] input {
+    background:white !important; color:#0f2027 !important;
+    border:1.5px solid #2c5364 !important; border-radius:8px !important;
+}
+[data-testid="stTextInput"] label { color:#0f2027 !important; font-weight:600 !important; }
+
+/* ── Number input ── */
+[data-testid="stNumberInput"] label { color:#0f2027 !important; font-weight:600 !important; }
+
+/* ── Selectbox ── */
+[data-testid="stSelectbox"] label { color:#0f2027 !important; font-weight:600 !important; }
+
+/* ── File uploader ── */
+[data-testid="stFileUploader"] label { color:#0f2027 !important; font-weight:600 !important; }
+
+/* ── Caption ── */
+[data-testid="stCaptionContainer"] p { color:#555 !important; font-size:13px !important; }
+
+/* ── Dataframe ── */
+[data-testid="stDataFrame"] { background:white !important; border-radius:10px !important; }
+
+/* ── Expander ── */
+[data-testid="stExpander"] summary p { color:#0f2027 !important; font-weight:600 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,12 +124,14 @@ if view == "admin":
         """)
 
     st.markdown(f"""
-    <div class="banner">
-        Today: <strong>{week_info['day_name']}, {datetime.now().strftime('%d %b %Y  %H:%M')}</strong>
-        &nbsp;|&nbsp; Week: <strong>{round(week_info['progress']*100,1)}%</strong> complete
-        &nbsp;|&nbsp; <strong>{week_info['days_left']} day(s)</strong> left
-        &nbsp;|&nbsp; Shift: <strong>5:00am – 7:30pm</strong>
-        &nbsp;|&nbsp; Targets: <strong>10h/day | 5 trips/day | 80% AR | 5% CR | 50h/week</strong>
+    <div style="background:linear-gradient(90deg,#0f2027,#203a43,#2c5364);
+                color:white; padding:14px 22px; border-radius:12px;
+                margin-bottom:18px; font-size:14px;">
+        Today: <strong style="color:white;">{week_info['day_name']}, {datetime.now().strftime('%d %b %Y  %H:%M')}</strong>
+        &nbsp;|&nbsp; Week: <strong style="color:white;">{round(week_info['progress']*100,1)}%</strong> complete
+        &nbsp;|&nbsp; <strong style="color:white;">{week_info['days_left']} day(s)</strong> left
+        &nbsp;|&nbsp; Shift: <strong style="color:white;">5:00am - 7:30pm</strong>
+        &nbsp;|&nbsp; Targets: <strong style="color:white;">10h/day | 5 trips/day | 80% AR | 5% CR | 50h/week</strong>
     </div>
     """, unsafe_allow_html=True)
 
@@ -192,14 +234,15 @@ if view == "admin":
     sbv_in_csv = df["Is SBV"].sum()
     sbv_kpi    = df[df["Is SBV"] == True]["KPI Met"].sum()
     st.markdown(f"""
-    <div class="sbv-bar">
-        🚛 <strong>SBV Drivers in this report:</strong>
+    <div style="background:white; border-radius:12px; padding:16px 22px;
+                border-left:5px solid #2c5364; margin-bottom:16px; color:#0f2027;">
+        🚛 <strong style="color:#0f2027;">SBV Drivers in this report:</strong>
         <span style="font-size:22px; font-weight:900; color:#0f2027;">
         &nbsp;{sbv_in_csv} / {SBV_TOTAL}</span>
         &nbsp;&nbsp;|&nbsp;&nbsp;
-        SBV KPI Compliant: <strong>{sbv_kpi} / {sbv_in_csv}</strong>
+        <span style="color:#0f2027;">SBV KPI Compliant: <strong>{sbv_kpi} / {sbv_in_csv}</strong>
         &nbsp;&nbsp;|&nbsp;&nbsp;
-        SBV Compliance Rate: <strong>{round((sbv_kpi/sbv_in_csv)*100) if sbv_in_csv else 0}%</strong>
+        SBV Compliance Rate: <strong>{round((sbv_kpi/sbv_in_csv)*100) if sbv_in_csv else 0}%</strong></span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -374,11 +417,13 @@ elif view == "drivers":
                     "⚠️" if row["Status"] == "Needs Improvement" else "🚨")
 
     st.markdown(f"""
-    <div class="driver-card">
-        <h2 style="margin:0 0 4px 0;">👤 {row['Driver']}</h2>
-        <p style="color:#666; margin:0 0 20px 0;">Team: {row.get('Team','—')}</p>
-        <h1 style="font-size:64px; margin:0; color:{score_color};">{score}</h1>
-        <p style="font-size:20px; margin:6px 0 0 0;">
+    <div style="background:white; border-radius:16px; padding:28px 32px;
+                box-shadow:0 4px 20px rgba(0,0,0,.10); margin-bottom:18px;">
+        <h2 style="margin:0 0 4px 0; color:#0f2027;">👤 {row['Driver']}</h2>
+        <p style="color:#555; margin:0 0 20px 0; font-size:15px;">
+            Team: {row.get('Team','—')}</p>
+        <h1 style="font-size:64px; margin:0; color:{score_color}; font-weight:900;">{score}</h1>
+        <p style="font-size:20px; margin:6px 0 0 0; color:#0f2027;">
             {status_emoji} <strong>{row['Status']}</strong>
         </p>
     </div>
@@ -450,9 +495,11 @@ elif view == "fleet":
                 f"{wi.get('days_left','—')} day(s) left  |  Updated: {updated}*")
 
     st.markdown(f"""
-    <div class="sbv-bar">
-        🚛 <strong>SBV Drivers in report:</strong>
-        <span style="font-size:20px; font-weight:900;">&nbsp;{sbv_in} / {sbv_tot}</span>
+    <div style="background:white; border-radius:12px; padding:16px 22px;
+                border-left:5px solid #2c5364; margin-bottom:16px; color:#0f2027;">
+        🚛 <strong style="color:#0f2027;">SBV Drivers in report:</strong>
+        <span style="font-size:20px; font-weight:900; color:#0f2027;">
+        &nbsp;{sbv_in} / {sbv_tot}</span>
     </div>
     """, unsafe_allow_html=True)
 
@@ -476,7 +523,12 @@ elif view == "fleet":
     i1, i2 = st.columns(2)
 
     def insight(col, text):
-        col.markdown(f'<div class="insight-card">{text}</div>', unsafe_allow_html=True)
+        col.markdown(
+            f'<div style="background:white; border-radius:12px; padding:14px 18px; '
+            f'box-shadow:0 2px 8px rgba(0,0,0,.07); margin-bottom:10px; '
+            f'font-size:15px; color:#0f2027;">{text}</div>',
+            unsafe_allow_html=True
+        )
 
     with i1:
         insight(i1, f"🏆 <strong>Best Driver:</strong> {top_driver} — score {df['Score'].max()}")

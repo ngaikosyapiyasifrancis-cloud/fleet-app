@@ -68,13 +68,22 @@ def make_link(view, team=None):
 
 def recompute_kpi(df, report_days=1):
     """
-    Recalculates KPI Met directly from raw metrics.
+    Recalculates KPI Met from weekly totals — NOT daily averages.
+
+    KPI is MET when ALL four conditions are true:
+      - Total hours online >= 50
+      - Total trips taken  >= 30
+      - Acceptance Rate    >= 80%
+      - Cancellation Rate  <= 5%
+
+    Daily targets (10h/day, 5 trips/day) are coaching pace guides only.
+    They must NOT be used for final KPI compliance — a driver who works
+    52h over 6 days averages 8.7h/day but has clearly hit the weekly target.
+
     Handles both old column names (Daily Hrs Avg / Daily Trips Avg)
     and new column names (Hours Online (weekly) / Trips (weekly)).
-    Always run after loading from Gist.
     """
-    days = max(int(report_days), 1)
-    df   = df.copy()
+    df = df.copy()
 
     # Resolve hours column — support both old and new naming
     if "Hours Online (weekly)" in df.columns:
@@ -96,22 +105,21 @@ def recompute_kpi(df, report_days=1):
     else:
         trp_col = None
 
+    # KPI compliance = weekly totals vs weekly targets (no division by days)
     if hrs_col and trp_col:
         df["KPI Met"] = (
             (df["Confirmation Rate"].astype(float) >= 0.80) &
             (df["Cancellation Rate"].astype(float) <= 0.05) &
-            (df[hrs_col].astype(float) / days >= 10.0) &
-            (df[trp_col].astype(float) / days >= 5.0)
+            (df[hrs_col].astype(float) >= 50.0) &
+            (df[trp_col].astype(float) >= 30.0)
         )
     else:
-        # Fallback: use AR and CR only if hours/trips columns missing
         df["KPI Met"] = (
             (df["Confirmation Rate"].astype(float) >= 0.80) &
             (df["Cancellation Rate"].astype(float) <= 0.05)
         )
 
-    # Also ensure Hours Online (weekly) and Trips (weekly) columns exist
-    # for display purposes — migrate from old names if needed
+    # Ensure display columns exist — migrate from old names if needed
     if "Hours Online (weekly)" not in df.columns and hrs_col:
         df["Hours Online (weekly)"] = df[hrs_col]
     if "Trips (weekly)" not in df.columns and trp_col:

@@ -66,6 +66,59 @@ def make_link(view, team=None):
         return f"{BASE_URL}/?view={view}&team={team.replace(' ','+')}"
     return f"{BASE_URL}/?view={view}"
 
+def recompute_kpi(df, report_days=1):
+    """
+    Recalculates KPI Met directly from raw metrics.
+    Handles both old column names (Daily Hrs Avg / Daily Trips Avg)
+    and new column names (Hours Online (weekly) / Trips (weekly)).
+    Always run after loading from Gist.
+    """
+    days = max(int(report_days), 1)
+    df   = df.copy()
+
+    # Resolve hours column — support both old and new naming
+    if "Hours Online (weekly)" in df.columns:
+        hrs_col = "Hours Online (weekly)"
+    elif "Daily Hrs Avg" in df.columns:
+        hrs_col = "Daily Hrs Avg"
+    elif "Hours Online" in df.columns:
+        hrs_col = "Hours Online"
+    else:
+        hrs_col = None
+
+    # Resolve trips column — support both old and new naming
+    if "Trips (weekly)" in df.columns:
+        trp_col = "Trips (weekly)"
+    elif "Daily Trips Avg" in df.columns:
+        trp_col = "Daily Trips Avg"
+    elif "Trips Taken" in df.columns:
+        trp_col = "Trips Taken"
+    else:
+        trp_col = None
+
+    if hrs_col and trp_col:
+        df["KPI Met"] = (
+            (df["Confirmation Rate"].astype(float) >= 0.80) &
+            (df["Cancellation Rate"].astype(float) <= 0.05) &
+            (df[hrs_col].astype(float) / days >= 10.0) &
+            (df[trp_col].astype(float) / days >= 5.0)
+        )
+    else:
+        # Fallback: use AR and CR only if hours/trips columns missing
+        df["KPI Met"] = (
+            (df["Confirmation Rate"].astype(float) >= 0.80) &
+            (df["Cancellation Rate"].astype(float) <= 0.05)
+        )
+
+    # Also ensure Hours Online (weekly) and Trips (weekly) columns exist
+    # for display purposes — migrate from old names if needed
+    if "Hours Online (weekly)" not in df.columns and hrs_col:
+        df["Hours Online (weekly)"] = df[hrs_col]
+    if "Trips (weekly)" not in df.columns and trp_col:
+        df["Trips (weekly)"] = df[trp_col]
+
+    return df
+
 def banner_html(text):
     return (
         f'<div style="background:linear-gradient(90deg,#0f2027,#203a43,#2c5364);'
@@ -383,9 +436,13 @@ elif view == "drivers":
         st.warning("Stats not available yet. Ask your fleet manager to publish this week's data.")
         st.stop()
 
-    df      = pd.DataFrame(data["fleet"])
-    wi      = data.get("week_info", week_info)
-    updated = data.get("updated_at", "")
+    df          = pd.DataFrame(data["fleet"])
+    wi          = data.get("week_info", week_info)
+    updated     = data.get("updated_at", "")
+    report_days = data.get("report_days", 1)
+
+    # Always recompute KPI from raw metrics
+    df = recompute_kpi(df, report_days)
 
     st.markdown(
         f"*{wi.get('day_name','—')} check-in  |  "
@@ -483,11 +540,18 @@ elif view == "fleet":
     df          = pd.DataFrame(data["fleet"])
     wi          = data.get("week_info", week_info)
     updated     = data.get("updated_at", "")
-    sbv_in      = data.get("sbv_in_csv", 0)
-    sbv_tot     = data.get("sbv_total", SBV_TOTAL)
-    sbv_kpi_n   = data.get("sbv_kpi", 0)
-    sbv_pct     = round((sbv_kpi_n / sbv_in) * 100) if sbv_in else 0
+    report_days = data.get("report_days", 1)
     missing_sbv = data.get("missing_sbv", [])
+
+    # Always recompute KPI from raw metrics to avoid stale stored values
+    df = recompute_kpi(df, report_days)
+
+    # SBV counts derived from recomputed data
+    sbv_df    = df[df["Is SBV"] == True] if "Is SBV" in df.columns else df
+    sbv_in    = len(sbv_df)
+    sbv_tot   = data.get("sbv_total", SBV_TOTAL)
+    sbv_kpi_n = int(sbv_df["KPI Met"].sum())
+    sbv_pct   = round((sbv_kpi_n / sbv_in) * 100) if sbv_in else 0
 
     st.markdown(
         f"*Management Overview  |  {wi.get('day_name','—')}  |  "
@@ -599,9 +663,13 @@ elif view == "team":
         st.warning("No data available. Ask the fleet manager to publish this week's stats.")
         st.stop()
 
-    df      = pd.DataFrame(data["fleet"])
-    wi      = data.get("week_info", week_info)
-    updated = data.get("updated_at", "")
+    df          = pd.DataFrame(data["fleet"])
+    wi          = data.get("week_info", week_info)
+    updated     = data.get("updated_at", "")
+    report_days = data.get("report_days", 1)
+
+    # Always recompute KPI from raw metrics
+    df = recompute_kpi(df, report_days)
 
     selected_team = (team_param if team_param and team_param in TEAMS
                      else st.selectbox("Select your team:", list(TEAMS.keys())))

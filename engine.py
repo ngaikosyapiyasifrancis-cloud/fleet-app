@@ -122,13 +122,16 @@ def get_remaining_targets(hours_online, trips_taken, confirmation_rate,
 
 def kpi_fully_met(hours_online, trips_taken, confirmation_rate,
                    cancellation_rate, report_days=1):
-    """All four KPI targets must be met based on report_days."""
-    days = max(int(report_days), 1)
+    """
+    KPI is met when weekly totals are hit — not daily averages.
+    A driver with 52h over 6 days has clearly met the 50h target.
+    Daily targets are pace guides for coaching only.
+    """
     return (
-        (hours_online / days) >= WEEKLY_TARGETS["daily_hours"]  and
-        (trips_taken  / days) >= WEEKLY_TARGETS["daily_trips"]  and
-        confirmation_rate      >= WEEKLY_TARGETS["acceptance"]   and
-        cancellation_rate      <= WEEKLY_TARGETS["cancellation"]
+        hours_online      >= WEEKLY_TARGETS["weekly_hours"]  and
+        trips_taken       >= WEEKLY_TARGETS["weekly_trips"]  and
+        confirmation_rate >= WEEKLY_TARGETS["acceptance"]    and
+        cancellation_rate <= WEEKLY_TARGETS["cancellation"]
     )
 
 

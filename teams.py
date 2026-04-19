@@ -11,7 +11,7 @@ SBV_DRIVERS = [
     "Brian Losen Mkandla", "Bright Jere", "Chidochase Chitendiso Mbulawa",
     "Davie Staliko", "Desmond Farai Murondi", "Esrom Maswekana",
     "Faidon Safali", "Francis Phwitiko", "Gift Obrey", "Gift Tenyiko Baloyi",
-    "Gilbert Babou Marifa", "Godknows Sithole", "Hlayisane Mawelela",
+    "Gilbert Babou Marifa", "Hlayisane Mawelela",
     "Ibrahim Rishard", "Idelito Valexy", "Innocent Grant Chapotera",
     "Ishmael Mussah", "Jacob Murondi", "Jefule Mustafa", "John Msosa",
     "Jolter Sizwe Ndlovu", "Joshua Mtisi", "Junior Ishumeal", "Justin Alli",
@@ -63,8 +63,7 @@ TEAMS = {
         "leader": "Haston Bikausi",
         "drivers": [
             "Haston Bikausi", "Joshua Mtisi", "Alnord Nyirenda",
-            "Yohane Stiven Banda", "Brian Losen Mkandla", "Raphael Banda",
-            "Godknows Sithole", "Desmond Farai Murondi", "Loshani Loshani",
+            "Yohane Stiven Banda", "Brian Losen Mkandla", "Raphael Banda", "Desmond Farai Murondi", "Loshani Loshani",
             "John Msosa", "Louis Suntche", "Esrom Maswikana Sekhobana",
             "K Tshabalala", "Alli Mabvuto", "Paul Moffat",
             "Asanda Nyembe", "Innocent Grant Chapotera",

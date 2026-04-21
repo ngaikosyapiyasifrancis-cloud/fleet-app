@@ -66,7 +66,7 @@ TEAMS = {
             "Yohane Stiven Banda", "Brian Losen Mkandla", "Raphael Banda", "Desmond Farai Murondi", "Loshani Loshani",
             "John Msosa", "Louis Suntche", "Esrom Maswikana Sekhobana",
             "K Tshabalala", "Alli Mabvuto", "Paul Moffat",
-            "Asanda Nyembe", "Innocent Grant Chapotera",
+            "Asanda Nyembe", "Innocent Grant Chapotera","Andrew Gracious Phiri",
         ],
     },
     "Team SV": {

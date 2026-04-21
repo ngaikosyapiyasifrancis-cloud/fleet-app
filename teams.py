@@ -25,7 +25,7 @@ SBV_DRIVERS = [
     "Sam Haba", "Samuel German", "Sanele Nkosi", "Siphesihle Mdebuka",
     "Stephen Mohali", "Stiven Banda", "Tebogo Sathekge", "Vincent Tonex",
     "Vumbhoni Owen Mathye", "Vuyisa Mdebuka", "Willard Bakali",
-    "Winson Chimfwembe Mwasinga",
+    "Winson Chimfwembe Mwasinga", "Ofentse Matias Leballo",
 ]
 SBV_TOTAL = len(SBV_DRIVERS)  # 70
 
@@ -77,7 +77,7 @@ TEAMS = {
             "Matata Samuel Netshandama", "Robert Nzuy Ngamuna",
             "Davie Nkhoma Staliko", "Samuel German", "Kado Genuen",
             "Willard Bakali", "Sam Haba", "Jacob Murondi",
-            "Chidochase Chitendiso Mbulawa",
+            "Chidochase Chitendiso Mbulawa","Ofentse Matias Leballo",
         ],
     },
     "Team SS": {

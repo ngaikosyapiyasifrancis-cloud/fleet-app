@@ -76,8 +76,7 @@ TEAMS = {
             "Vinicent Tonex", "Gilbert Babou Kapanda", "Idelito Valexy",
             "Matata Samuel Netshandama", "Robert Nzuy Ngamuna",
             "Davie Nkhoma Staliko", "Samuel German", "Kado Genuen",
-            "Willard Bakali", "Sam Haba", "Jacob Murondi",
-            "Chidochase Chitendiso Mbulawa","Ofentse Matias Leballo",
+            "Willard Bakali", "Sam Haba", "Jacob Murondi","Ofentse Matias Leballo",
         ],
     },
     "Team SS": {

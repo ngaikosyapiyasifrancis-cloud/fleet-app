@@ -8,7 +8,7 @@ SBV_DRIVERS = [
     "Akimu Soko", "Alfred Sanny Tshabalala", "Alli Mabvuto", "Alnord Nyirenda",
     "Amazing Calvin Servazio", "Andrew Gracious Phiri", "Anthonio Haston Bikausi",
     "Asanda Nyembe", "Blessings Maseko Sinosi", "Brian Chiremba",
-    "Brian Losen Mkandla", "Bright Jere", "Chidochase Chitendiso Mbulawa",
+    "Brian Losen Mkandla", "Bright Jere",
     "Davie Staliko", "Desmond Farai Murondi", "Esrom Maswekana",
     "Faidon Safali", "Francis Phwitiko", "Gift Obrey", "Gift Tenyiko Baloyi",
     "Gilbert Babou Marifa", "Hlayisane Mawelela",
